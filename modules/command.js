@@ -54,11 +54,39 @@ const trigger_command_input = () => {
 
     // update status
     active_toggles.set(main_command, toggle_status);
+    store.set(`toggle.${main_command}`, toggle_status);
     is_toggled = toggle_status;
   }
 
   // call back with arguments
   callback_fn(args, is_toggled);
+}
+
+const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
+  // must be a toggle
+  if (!is_toggle)
+    return;
+
+  // must have support function
+  if (typeof GM_registerMenuCommand !== "function")
+    return;
+
+  // unregister old command
+  if (menu_obj)
+    GM_unregisterMenuCommand(menu_obj);
+
+  // render
+  let userscript_label = `${command}: ${is_enabled ? "enabled" : "disabled"}`
+  menu_obj = GM_registerMenuCommand(userscript_label, () => {
+    if (!is_toggle)
+      return;
+
+    const prev_toggle_status = store.get(`toggle.${command}`) ?? false;
+    const toggle_status = prev_toggle_status === true ? false : true;
+
+    store.set(`toggle.${command}`, toggle_status);
+    return userscript_menu({ command, is_toggle, menu_obj, toggle_status });
+  })
 }
 
 // listen for user input
@@ -141,6 +169,14 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
         return `failed to define alternative command because the command ${command} has already been defined.`;
     }
   )
+
+  // render userscript menu
+  userscript_menu({
+    command,
+    is_toggle,
+    menu_obj: undefined,
+    is_enabled: false
+  });
 }
 
 // register useful function

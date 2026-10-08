@@ -67,6 +67,12 @@ const buildScript = async ({ minify, config, entry_file, outp_file }) => {
   const bundled_code = await result.outputs[0].text();
   const bundled_outp = gen_header(config) + bundled_code;
 
+  // create dist if doesn't exist
+  // avoid toctou stuff by doing this
+  try {
+    fs.mkdirSync(path.dirname(outp_file))
+  } catch {}
+
   // write output into file
   fs.writeFileSync(outp_file, bundled_outp);
 
