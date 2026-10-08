@@ -84,7 +84,21 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     const prev_toggle_status = store.get(`toggle.${command}`) ?? false;
     const toggle_status = prev_toggle_status === true ? false : true;
 
+    // set toggle state
+    active_toggles.set(command, toggle_status);
     store.set(`toggle.${command}`, toggle_status);
+ 
+    // get the command data
+    const command_obj = commands.get(command);
+
+    // get callback function
+    const callback_fn = typeof command_obj === "object"
+      ? command_obj?.callback_fn
+      : command_obj;
+    
+    callback_fn([], toggle_status);
+
+    // return
     return userscript_menu({ command, is_toggle, menu_obj, toggle_status });
   })
 }
@@ -175,7 +189,7 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
     command,
     is_toggle,
     menu_obj: undefined,
-    is_enabled: false
+    is_enabled: active_toggles.get(command) ?? false
   });
 }
 
