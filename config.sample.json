@@ -1,0 +1,17 @@
+{
+  "name": "kumiyui",
+  "version": "1.0.0",
+  "description": "a framework for web injection",
+  "author": "kumiyuki",
+  "match": [
+    "https://example.com/",
+    "https://github.com/kumiyuki"
+  ],
+  "grant": [
+    "GM_setValue",
+    "GM_getValue"
+  ],
+  "run-at": "document-start",
+  "icon": "",
+  "license": "GPL-3.0"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "kumiyui",
+  "version": "1.0.0",
+  "author": {
+    "name": "kumiyuki",
+    "url": "https://github.com/kumiyuki"
+  },
+  "type": "module",
+  "main": "kumiyui.js",
+  "bin": {
+    "kumiyui": "./cli.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
