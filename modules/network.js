@@ -11,7 +11,7 @@ const is_json = (str) => {
 }
 
 // this function is heavily engineered by LLM (used gemini)
-// i just rewrite this with my understanding and shortened most of the thing i found not useful
+// i just rewrite this with my understanding and remove most of the thing i found not useful
 const hook_registry = { before: [], after: [] };
 
 /**
