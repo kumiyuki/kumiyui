@@ -12,6 +12,12 @@ const bypass_detection_hook = (hook_env) => {
 
   try {
     const new_tostring_hook = (...args) => {
+      for (const _obj of args) {
+        if (typeof _obj !== "function")
+          // stop here because this only work with function and classes
+          return;
+      }
+
       if (args.length <= 0)
         return o_fn_c(...args);
 
@@ -160,7 +166,6 @@ const mask_hook = (fn, native_string) => {
   // toString() hook
   try {
     // same as the iframe above, use "function()" here
-    console.log("here", hook_native)
     const modified_toString = function() { return hook_native };
 
     Object.defineProperty(fn, "toString",{
@@ -174,6 +179,6 @@ const mask_hook = (fn, native_string) => {
   }
 }
 
-export {
+export default {
   mask_hook
 }

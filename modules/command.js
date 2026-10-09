@@ -59,7 +59,11 @@ const trigger_command_input = () => {
   }
 
   // call back with arguments
-  callback_fn(args, is_toggled);
+  try {
+    callback_fn(args, is_toggled);
+  } catch (e) {
+    console.error(`[kumiyui] failed to run command's callback function`, e);
+  }
 }
 
 const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
@@ -68,8 +72,10 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     return;
 
   // must have support function
-  if (typeof GM_registerMenuCommand !== "function")
-    return;
+  if (
+    typeof GM_registerMenuCommand !== "function" ||
+    typeof GM_unregisterMenuCommand !== "function"
+  ) return;
 
   // unregister old command
   if (menu_obj)
@@ -95,8 +101,13 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     const callback_fn = typeof command_obj === "object"
       ? command_obj?.callback_fn
       : command_obj;
-    
-    callback_fn([], toggle_status);
+   
+    // isolate callback_fn from error
+    try {
+      callback_fn([], toggle_status);
+    } catch (e) {
+      console.error(`[kumiyui] failed to run command's callback function`, e);
+    }
 
     // return
     return userscript_menu({ command, is_toggle, menu_obj, toggle_status });
@@ -207,7 +218,7 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
   userscript_menu({
     command,
     is_toggle,
-    menu_obj: undefined,
+    menu_obj: null,
     is_enabled: active_toggles.get(command) ?? false
   });
 }
