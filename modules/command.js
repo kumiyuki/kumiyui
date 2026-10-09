@@ -191,8 +191,11 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
   commands_metad.push({ command, alt_commands, description, is_toggle });
 
   // for toggler
-  if (is_toggle === true && !active_toggles.has(command))
-    active_toggles.set(command, false);
+  if (is_toggle === true)
+    active_toggles.set(
+      command,
+      store.get(`toggle.${command}`, false)
+    );
 
   // i have heard that define this first will save memory since Map store the reference of the value
   const aliases_obj = { command, callback_fn };

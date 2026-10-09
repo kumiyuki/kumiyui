@@ -9,7 +9,9 @@
   ],
   "grant": [
     "GM_setValue",
-    "GM_getValue"
+    "GM_getValue",
+    "GM_registerMenuCommand",
+    "GM_unregisterMenuCommand"
   ],
   "run-at": "document-start",
   "icon": "",

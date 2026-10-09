@@ -60,7 +60,7 @@ const create_observed_array = (target_arr = []) => {
 
       // Only dispatch if it's a valid array index assignment
       if (success && isIndex && isNewKey && value !== undefined) {
-        eventBus.dispatchEvent(
+        event_bus.dispatchEvent(
           new CustomEvent('add', { detail: { index: Number(property), value } })
         );
       }
@@ -74,7 +74,7 @@ const create_observed_array = (target_arr = []) => {
       const success = Reflect.deleteProperty(target, property);
 
       if (success && isIndex && oldValue !== undefined) {
-        eventBus.dispatchEvent(
+        event_bus.dispatchEvent(
           new CustomEvent('remove', { detail: { index: Number(property), value: oldValue } })
         );
       }
