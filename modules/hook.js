@@ -1,4 +1,4 @@
-import hook_mask from "./hook_masker"
+import { mask_hook } from "./hook_masker"
 
 const o_fn_c = window?.Function?.prototype?.toString?.call?.bind(
   window?.Function?.prototype?.toString
@@ -22,7 +22,7 @@ const apply_raw_hook = ({ obj, prop, new_fn, options, native_str }) => {
 
   // call hook_masker if user allows to
   if (options?.mask_hook === true && native_str)
-    hook_mask(obj[prop], native_str)
+    mask_hook(obj[prop], native_str)
 }
 
 /**
