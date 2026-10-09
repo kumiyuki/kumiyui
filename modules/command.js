@@ -123,21 +123,40 @@ window.addEventListener("keydown", (event) => {
 
 // definition of callback_fn()
 /**
+ * The callback for callback_fn in Command()
+ * 
  * @callback command_callback
  * @param {string[]} [args] - the parsed arguments passed to the command (from user input).
  * @param {boolean} [is_toggled] - the current toggle state. (undefined means no toggle status)
  * @param {...*} extra - any additional arguments (this is optional), this is useful if your program needs custom logic for callback function.
  * @returns {*} the result of the execution.
+ * 
+ * @example
+ * // for command has is_toggle: true
+ * const callback_fn = (args, is_toggled) => {}
+ * 
+ * // for command has is_toggle: false
+ * const callback_fn = (args) => {}
  */
 
 /**
- * registers a new command
+ * Registers a new command
+ * 
  * @param {Object} options
  * @param {string} options.command - the primary name of the command (e.g. "kirakira").
  * @param {string[]} options.alt_commands - an array of alternative aliases or shortcuts for the command.
  * @param {string} options.description - explain the purpose of the command.
  * @param {boolean} [options.is_toggle=false] - whether the command behaves as a toggle switch.
  * @param {command_callback} options.callback_fn - the function executed when user run the command.
+ * 
+ * @example
+ * Command({
+ *  command: "konnichiwa",
+ *  alt_commands: ["hello", "hi"], // aliases
+ *  description: "say hello",
+ *  is_toggle: false, // you don't need to toggle on/off for a command to say "hello"
+ *  callback_fn: () => { console.log("hello") } // calls everytime when user triggers
+ * })
  */
 const Command = ({ command, alt_commands, description, is_toggle, callback_fn }) => {
   // check for correct type

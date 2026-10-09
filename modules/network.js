@@ -2,6 +2,21 @@ const o_fetch = window.fetch;
 const o_send_beacon = window.navigator.sendBeacon;
 const o_xhr = window.XMLHttpRequest;
 
+/**
+ * Check if a string is in JSON format
+ * 
+ * @param {string} str 
+ * @returns {boolean} Whether the given string is in JSON format
+ * 
+ * @example
+ * is_json(`{"a": 0}`) // => true
+ * is_json(`[0, 1]`) // => true
+ * 
+ * is_json({}) // => false
+ * is_json(`{`) // => false
+ * is_json(true) // => false
+ * is_json(0) // => false
+ */
 const is_json = (str) => {
   if (typeof str !== "string") return false;
   try {
@@ -19,6 +34,10 @@ const hook_registry = { before: [], after: [] };
  * 
  * @param {"before"|"after"} type - when to execute the hook ("before" the request goes out, or "after" it completes)
  * @param {Function} callback - the user-defined function containing manipulation logic.
+ * 
+ * @example
+ * register_network_hook("before", (context) => {});
+ * register_network_hook("after", (context, result) => {})
  */
 const register_network_hook = (type, callback) => {
   // fetch() hook
