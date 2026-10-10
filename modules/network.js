@@ -343,20 +343,22 @@ const _init_network_hook = () => {
       }
 
       // avoid client gets data before modified by "after" hooks
-      onreadystatechange(...args) {
-        super.onreadystatechange(args[0], async (..._o_args) => {
+      set onreadystatechange(on_state_change_fn) {
+        super.onreadystatechange(on_state_change_fn, async (..._o_args) => {
           await new Promise((resolve) => {
             const state_change_watcher = setInterval(() => {
               if (this.readyState === 4 && this._kumiyui_finished === true) {
                 clearInterval(state_change_watcher);
+                resolve();
+              } else if (this.readyState !== 4) {
                 resolve();
               }
             }, 250);
           })
 
           // so the "after" hook finished, call the requested listener
-          if (typeof args[1] === "function")
-            args[1](..._o_args);
+          if (typeof on_state_change_fn === "function")
+            on_state_change_fn(..._o_args);
         });
       }
 
@@ -379,7 +381,7 @@ const _init_network_hook = () => {
 
       addEventListener(...args) {
         // only hook for state watcher event only
-        if (args[0] !== "readystatechange" || args[0] !== "load")
+        if (args[0] !== "readystatechange" && args[0] !== "load")
           return super.addEventListener(...args);
         
         super.addEventListener(args[0], async (..._o_args) => {
@@ -387,6 +389,9 @@ const _init_network_hook = () => {
             const state_change_watcher = setInterval(() => {
               if (this.readyState === 4 && this._kumiyui_finished === true) {
                 clearInterval(state_change_watcher);
+                resolve();
+              } else if (this.readyState !== 4) {
+                // if it's not ready, there's nothing else beside skipping it
                 resolve();
               }
             }, 250);
