@@ -1,3 +1,4 @@
+import Logger from "./logger";
 import store from "./store";
 
 const prompt = window.prompt;
@@ -6,6 +7,7 @@ const trigger_keys = new Set(["/", ":"]);
 const commands = new Map();
 const active_toggles = new Map();
 const commands_metad = [];
+const logger = new Logger({ name: "kumiyui:command", level: Logger.LEVELS.info });
 
 const trigger_command_input = () => {
   const user_input = prompt("input command:")?.toString();
@@ -62,7 +64,7 @@ const trigger_command_input = () => {
   try {
     callback_fn(args, is_toggled);
   } catch (e) {
-    console.error(`[kumiyui] failed to run command's callback function`, e);
+    logger.error("failed to execute callback_fn(), error:", e)
   }
 }
 
@@ -106,7 +108,7 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     try {
       callback_fn([], toggle_status);
     } catch (e) {
-      console.error(`[kumiyui] failed to run command's callback function`, e);
+      logger.error("failed to execute callback_fn(), error:", e)
     }
 
     // return
@@ -166,7 +168,7 @@ window.addEventListener("keydown", (event) => {
  *  alt_commands: ["hello", "hi"], // aliases
  *  description: "say hello",
  *  is_toggle: false, // you don't need to toggle on/off for a command to say "hello"
- *  callback_fn: () => { console.log("hello") } // calls everytime when user triggers
+ *  callback_fn: () => { logger.log("hello") } // calls everytime when user triggers
  * })
  */
 const Command = ({ command, alt_commands, description, is_toggle, callback_fn }) => {
@@ -191,10 +193,11 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
   commands_metad.push({ command, alt_commands, description, is_toggle });
 
   // for toggler
+  const command_enabled = store.get(`toggle.${command}`, false);
   if (is_toggle === true)
     active_toggles.set(
       command,
-      store.get(`toggle.${command}`, false)
+      command_enabled
     );
 
   // i have heard that define this first will save memory since Map store the reference of the value
@@ -222,8 +225,17 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
     command,
     is_toggle,
     menu_obj: null,
-    is_enabled: active_toggles.get(command) ?? false
+    is_enabled: command_enabled
   });
+
+  // run the command if enabled
+  if (command_enabled) {
+    try {
+      callback_fn([], command_enabled)
+    } catch (e) {
+      logger.error("failed to execute callback_fn(), error:", e)
+    }
+  }
 }
 
 // register useful function
