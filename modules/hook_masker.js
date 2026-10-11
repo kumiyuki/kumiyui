@@ -38,7 +38,7 @@ const bypass_detection_hook = (hook_env) => {
 
     _hooks.set(hook_env.Function.prototype.toString, "function toString() { [native code] }");
   } catch (e) {
-    logger.error(`[kumiyui] failed to mask Function.prototype.call()`, e);
+    logger.error(`failed to mask Function.prototype.call()`, e);
   }
 
   // hook to return native code (Object method)
@@ -60,7 +60,7 @@ const bypass_detection_hook = (hook_env) => {
       configurable: true
     })
   } catch (e) {
-    logger.error(`[kumiyui] failed to mask Function.prototype.constructor.toString()`, e);
+    logger.error(`failed to mask Function.prototype.constructor.toString()`, e);
   }
 }
 
@@ -103,7 +103,7 @@ Element.prototype.appendChild = function (...args) {
         configurable: true
       });
     } catch(e) {
-      logger.error(`[kumiyui] cross context navigation reset watcher threw error:`, e);
+      logger.error(`cross context navigation reset watcher threw error:`, e);
     }
   }
 
@@ -163,7 +163,7 @@ export const mask_hook = (fn, native_string) => {
       _hooks.set(fn.hasOwnProperty, "function hasOwnProperty() { [native code] }");
     }
   } catch (e) {
-    logger.error(`[kumiyui] failed to mask fn.hasOwnProperty()`, e);
+    logger.error(`failed to mask fn.hasOwnProperty()`, e);
   }
 
   // toString() hook
@@ -178,6 +178,6 @@ export const mask_hook = (fn, native_string) => {
     })
     _hooks.set(fn.toString, "function toString() { [native code] }");
   } catch (e) {
-    logger.error(`[kumiyui] failed to mask fn.toString()`, e);
+    logger.error(`failed to mask fn.toString()`, e);
   }
 }

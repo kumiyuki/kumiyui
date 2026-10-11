@@ -89,7 +89,7 @@ const _init_network_hook = () => {
           try {
             modification = await hook(context);
           } catch (e) {
-            logger.error(`[kumiyui] cannot execute hook listener on window.fetch() hook (type: "before"), error:`, e);
+            logger.error(`cannot execute hook listener on window.fetch() hook (type: "before"), error:`, e);
           }
 
           if (typeof modification !== "undefined") {
@@ -125,7 +125,7 @@ const _init_network_hook = () => {
 
           ;
         } catch (e) {
-          logger.error(`[kumiyui] failed to hook networt request (type: "before"), error:`, e);
+          logger.error(`failed to hook networt request (type: "before"), error:`, e);
         }
       }
 
@@ -146,7 +146,7 @@ const _init_network_hook = () => {
           response = await o_fetch.apply(window, context?.args);
         } catch (net_err) {
           // network error
-          logger.log("[kumiyui] failed to send real network request to the server.", net_err);
+          logger.log("failed to send real network request to the server.", net_err);
 
           // throw error so the website's application code can acknowledge the error
           // it will also crash this hook too...
@@ -168,7 +168,7 @@ const _init_network_hook = () => {
           try {
             modification = await hook(context, response_for_hook);
           } catch (e) {
-            logger.error(`[kumiyui] cannot execute hook listener on window.fetch() hook (type: "after"), error:`, e);
+            logger.error(`cannot execute hook listener on window.fetch() hook (type: "after"), error:`, e);
           }
 
           if (typeof modification !== "undefined") {
@@ -193,7 +193,7 @@ const _init_network_hook = () => {
             }
           }
         } catch (e) {
-          logger.error(`[kumiyui] error on "after" hook, error:`, e);
+          logger.error(`error on "after" hook, error:`, e);
         }
       }
 
@@ -230,7 +230,7 @@ const _init_network_hook = () => {
             try {
               modification = hook(context);
             } catch (e) {
-              logger.error(`[kumiyui] cannot execute hook listener on sendBeacon hook (type: "before"), error:`, e);
+              logger.error(`cannot execute hook listener on sendBeacon hook (type: "before"), error:`, e);
             }
 
             if (
@@ -241,7 +241,7 @@ const _init_network_hook = () => {
               break;
             }
           } catch (e) {
-            logger.error(`[kumiyui] error on sendBeacon hook (type: "before"), error:`, e);
+            logger.error(`error on sendBeacon hook (type: "before"), error:`, e);
           }
         }
 
@@ -252,7 +252,7 @@ const _init_network_hook = () => {
           try {
             hook(context, result);
           } catch (e) {
-            logger.error(`[kumiyui] cannot execute hook listener on sendBeacon hook (type: "after"), error:`, e);
+            logger.error(`cannot execute hook listener on sendBeacon hook (type: "after"), error:`, e);
           }
         }
 
@@ -315,7 +315,7 @@ const _init_network_hook = () => {
               break;
             }
           } catch (e) {
-            logger.error(`[kumiyui] cannot execute hook listener on XHR hook (type: "before"), error:`, e);
+            logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
           }
         }
 
@@ -439,7 +439,7 @@ const _init_network_hook = () => {
                   try {
                     mod = await hook(context, clone);
                   } catch (e) {
-                    logger.error(`[kumiyui] cannot execute hook listener on XHR hook (type: "before"), error:`, e);
+                    logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
                   }
 
                   if (typeof mod !== "undefined") {
@@ -450,7 +450,7 @@ const _init_network_hook = () => {
 
                   this._kumiyui_finished = true;
                 } catch (e) {
-                  logger.error(`[kumiyui] error on XHR hook (type: "after"), error:`, e);
+                  logger.error(`error on XHR hook (type: "after"), error:`, e);
                 }
               }
             }
