@@ -1,13 +1,21 @@
 import { Logger } from "./logger";
 import { get as store_get, set as store_set } from "./store";
 
+// functions that kumiyui needs
 const b64_encode = window.btoa;
 const prompt = window.prompt;
 const alert = window.alert;
+
+// keys to trigger input prompt
 const trigger_keys = new Set(["/", ":"]);
+
+// for storing temporary
 const commands = new Map();
 const active_toggles = new Map();
+const userscript_menu_id = new Map();
 const commands_metad = [];
+
+// logger
 const logger = new Logger({ name: "kumiyui:command", level: Logger.LEVELS.info });
 
 const trigger_command_input = () => {
@@ -45,11 +53,14 @@ const trigger_command_input = () => {
 
   // main command
   // (get the main command from aliases)
-  const main_command = command_obj?.command;
+  const main_command = typeof command_obj === "object"
+    ? command_obj?.command
+    : command;
 
   // set toggler
+  const has_toggle = active_toggles.has(main_command);
   let is_toggled = undefined; // this should not exist or known by default
-  if (active_toggles.has(main_command)) {
+  if (has_toggle) {
     const toggle_status =
       active_toggles.get(main_command) === true
         ? false
@@ -59,6 +70,15 @@ const trigger_command_input = () => {
     active_toggles.set(main_command, toggle_status);
     store_set(`toggle.${b64_encode(main_command)}`, toggle_status);
     is_toggled = toggle_status;
+
+    // update status for userscript menu
+    if (userscript_menu_id.has(main_command))
+      // trigger rendering userscript menu
+      userscript_menu({
+        command: main_command,
+        is_toggle: has_toggle,
+        is_enabled: toggle_status
+      })
   }
 
   // call back with arguments
@@ -69,7 +89,7 @@ const trigger_command_input = () => {
   }
 }
 
-const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
+const userscript_menu = ({ command, is_toggle, is_enabled }) => {
   // must be a toggle
   if (!is_toggle)
     return;
@@ -80,13 +100,20 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     typeof GM_unregisterMenuCommand !== "function"
   ) return;
 
-  // unregister old command
-  if (menu_obj)
-    GM_unregisterMenuCommand(menu_obj);
+  // delete old userscript menu if exists
+  if (userscript_menu_id.has(command)) {
+    const menu_id = userscript_menu_id.get(command);
+
+    // unregister the menu command
+    GM_unregisterMenuCommand(menu_id);
+
+    // delete the id from the Map
+    userscript_menu_id.delete(command);
+  }
 
   // render
   let userscript_label = `${command}: ${is_enabled ? "enabled" : "disabled"}`
-  menu_obj = GM_registerMenuCommand(userscript_label, () => {
+  const new_menu_obj = GM_registerMenuCommand(userscript_label, () => {
     if (!is_toggle)
       return;
 
@@ -113,8 +140,11 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     }
 
     // return
-    return userscript_menu({ command, is_toggle, menu_obj, toggle_status });
+    return userscript_menu({ command, is_toggle, is_enabled: toggle_status });
   })
+
+  // update userscript menu id
+  userscript_menu_id.set(command, new_menu_obj);
 }
 
 // listen for user input
@@ -231,13 +261,13 @@ export const Command = ({ command, aliases, command_name, description, is_toggle
     }
   )
 
-  // render userscript menu
-  userscript_menu({
-    command,
-    is_toggle,
-    menu_obj: null,
-    is_enabled: command_enabled
-  });
+  // render userscript menu (if the command has applied for toggle functionality)
+  if (is_toggle === true)
+    userscript_menu({
+      command,
+      is_toggle,
+      is_enabled: command_enabled
+    });
 
   // run the command if enabled
   if (command_enabled) {
