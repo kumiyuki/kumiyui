@@ -5,7 +5,6 @@ const o_fetch = globalThis.fetch || window.fetch;
 const o_send_beacon = globalThis?.navigator?.sendBeacon || window?.navigator?.sendBeacon;
 const o_xhr = globalThis.XMLHttpRequest || window.XMLHttpRequest;
 const logger = new Logger({ name: "kumiyui:hook_masker", level: Logger.LEVELS.info });
-const mutex = new Mutex();
 
 /**
  * Check if a string is in JSON format
