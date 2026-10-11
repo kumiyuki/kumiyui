@@ -1,9 +1,9 @@
 // default module export
-export { Command } from "./modules/command";
-export { store } from "./modules/store";
-export { ObservedArray } from "./modules/observed_array";
-export { Network } from "./modules/network";
-export { Logger } from "./modules/logger";
+export * from "./modules/command";
+export * from "./modules/store";
+export * from "./modules/observed_array";
+export * from "./modules/network";
+export * from "./modules/logger";
 
 // hooking export
 import { hook } from "./modules/hook";
