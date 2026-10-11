@@ -29,6 +29,32 @@ export const is_json = (str) => {
   } catch { return false; }
 }
 
+// this function is created to avoid the client from getting response before the "after" hook finished assigning value
+const await_after_hook = async (env) => {
+  // prevent from continue to the watcher to avoid wasting resources
+  if (env?.readyState === 4 && env?._kumiyui_finished === true)
+    return;
+  
+  // if already at ready state but "after" hook still haven't finished yet
+  if (env?.readyState === 4 && !env._kumiyui_finished) {
+    await new Promise((resolve) => {
+      // push it into listener queue first
+      env?._kumiyui_change_listeners.push(resolve);
+
+      // if it finishes right after pushing or at the moment right before await new Promise(...) and between if check
+      if (env._kumiyui_finished === true) {
+        // clean up the listener
+        const listener_index = env._kumiyui_change_listeners.indexOf(resolve);
+        if (listener_index !== -1)
+          env._kumiyui_change_listeners.splice(listener_index, 1);
+
+        // resolve it
+        return resolve();
+      }
+    })
+  }
+}
+
 // this function is heavily engineered by LLM (used gemini)
 // i just rewrite this with my understanding and remove most of the thing i found not useful
 const hook_registry = { before: [], after: [] };
@@ -272,7 +298,30 @@ const _init_network_hook = () => {
         this._kumiyui_context = { args: ["", null], method: "GET", api: "xhr" };
         this._kumiyui_response = null;
         this._kumiyui_status = null;
-        this._kumiyui_finished = false;
+
+        // define kumiyui_finished with event listener like method
+        const self = this;
+        self._kumiyui_change_listeners = [];
+        let finished_state = false;
+        Object.defineProperty(this, "_kumiyui_finished", {
+          configurable: true,
+          enumerable: true,
+          get() { return finished_state },
+          set(new_value) {
+            // ignores redundant assignments
+            if (finished_state === new_value) return;
+            finished_state = new_value;
+
+            // if value turns true, notify all listener
+            if (new_value === true) {
+              while (self?._kumiyui_change_listeners.length > 0) {
+                const resolve_hook = self._kumiyui_change_listeners.shift();
+                if (typeof resolve_hook === "function")
+                  resolve_hook();
+              }
+            }
+          }
+        })
       }
 
       async open(method, url, ...args) {
@@ -344,17 +393,9 @@ const _init_network_hook = () => {
 
       // avoid client gets data before modified by "after" hooks
       set onreadystatechange(on_state_change_fn) {
-        super.onreadystatechange(on_state_change_fn, async (..._o_args) => {
-          await new Promise((resolve) => {
-            const state_change_watcher = setInterval(() => {
-              if (this.readyState === 4 && this._kumiyui_finished === true) {
-                clearInterval(state_change_watcher);
-                resolve();
-              } else if (this.readyState !== 4) {
-                resolve();
-              }
-            }, 250);
-          })
+        super.onreadystatechange(async (..._o_args) => {
+          // avoid client from knowing the reponse before "after" hook assigning response data
+          await await_after_hook(this);
 
           // so the "after" hook finished, call the requested listener
           if (typeof on_state_change_fn === "function")
@@ -364,14 +405,8 @@ const _init_network_hook = () => {
 
       set onload(onload_fn) {
         super.onload(async (..._o_args) => {
-          await new Promise((resolve) => {
-            const state_change_watcher = setInterval(() => {
-              if (this._kumiyui_finished === true) {
-                clearInterval(state_change_watcher);
-                resolve();
-              }
-            }, 250);
-          })
+          // avoid client from knowing the reponse before "after" hook assigning response data
+          await await_after_hook(this);
 
           // so the "after" hook finished, call the requested listener
           if (typeof onload_fn === "function")
@@ -385,17 +420,8 @@ const _init_network_hook = () => {
           return super.addEventListener(...args);
         
         super.addEventListener(args[0], async (..._o_args) => {
-          await new Promise((resolve) => {
-            const state_change_watcher = setInterval(() => {
-              if (this.readyState === 4 && this._kumiyui_finished === true) {
-                clearInterval(state_change_watcher);
-                resolve();
-              } else if (this.readyState !== 4) {
-                // if it's not ready, there's nothing else beside skipping it
-                resolve();
-              }
-            }, 250);
-          })
+          // avoid client from knowing the reponse before "after" hook assigning response data
+          await await_after_hook(this);
 
           // so the "after" hook finished, call the requested listener
           if (typeof args[1] === "function")
