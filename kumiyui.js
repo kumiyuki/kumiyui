@@ -1,20 +1,11 @@
-import Command from "./modules/command";
-import store from "./modules/store";
-import hook from "./modules/hook";
-import hook_masker from "./modules/hook_masker";
-import ObservedArray from "./modules/observed_array";
-import Network from "./modules/network";
-import Logger from "./modules/logger";
+// default module export
+export { Command } from "./modules/command";
+export { store } from "./modules/store";
+export { ObservedArray } from "./modules/observed_array";
+export { Network } from "./modules/network";
+export { Logger } from "./modules/logger";
 
-// create a Hook object for export
-const Hook = { hook, hook_masker };
-
-// export it
-export {
-  Command,
-  store,
-  Hook,
-  ObservedArray,
-  Network,
-  Logger
-}
+// hooking export
+import { hook } from "./modules/hook";
+import { mask_hook as hook_masker } from "./modules/hook_masker";
+export const Hook = { hook, hook_masker };
