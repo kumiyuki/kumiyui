@@ -1,4 +1,4 @@
-import { hook_masker } from "./hook_masker"
+import { mask_hook } from "./hook_masker"
 
 const o_fn_c = window?.Function?.prototype?.toString?.call?.bind(
   window?.Function?.prototype?.toString
@@ -11,10 +11,10 @@ const apply_raw_hook = ({ obj, prop, new_value, options, native_str }) => {
     writable: options?.block_overwrite === true ? false : true
   })
 
-  // call hook_masker if user allows to
+  // call mask_hook if user allows to
   // only call if obj[prop] is a function (we know it through native_str being passed from the hook function)
   if (options?.mask_hook === true && native_str)
-    return hook_masker.mask_hook(obj[prop], native_str);
+    return mask_hook(obj[prop], native_str);
 }
 
 /**
