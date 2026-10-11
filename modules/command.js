@@ -1,6 +1,7 @@
 import { Logger } from "./logger";
 import { get as store_get, set as store_set } from "./store";
 
+const b64_encode = window.btoa;
 const prompt = window.prompt;
 const alert = window.alert;
 const trigger_keys = new Set(["/", ":"]);
@@ -56,7 +57,7 @@ const trigger_command_input = () => {
 
     // update status
     active_toggles.set(main_command, toggle_status);
-    store_set(`toggle.${main_command}`, toggle_status);
+    store_set(`toggle.${b64_encode(main_command)}`, toggle_status);
     is_toggled = toggle_status;
   }
 
@@ -89,12 +90,12 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     if (!is_toggle)
       return;
 
-    const prev_toggle_status = store_get(`toggle.${command}`) ?? false;
+    const prev_toggle_status = store_get(`toggle.${b64_encode(command)}`) ?? false;
     const toggle_status = prev_toggle_status === true ? false : true;
 
     // set toggle state
     active_toggles.set(command, toggle_status);
-    store_set(`toggle.${command}`, toggle_status);
+    store_set(`toggle.${b64_encode(command)}`, toggle_status);
  
     // get the command data
     const command_obj = commands.get(command);
@@ -156,8 +157,9 @@ window.addEventListener("keydown", (event) => {
  * Registers a new command
  * 
  * @param {Object} options
- * @param {string} options.command - the primary name of the command (e.g. "kirakira").
- * @param {string[]} options.alt_commands - an array of alternative aliases or shortcuts for the command.
+ * @param {string} options.command - the primary command (e.g. "kirakira").
+ * @param {string[]} options.aliases - an array of alternative aliases or shortcuts for the command.
+ * @param {string} [options.command_name=options.aliases] - the name of the command (optional).
  * @param {string} options.description - explain the purpose of the command.
  * @param {boolean} [options.is_toggle=false] - whether the command behaves as a toggle switch.
  * @param {command_callback} options.callback_fn - the function executed when user run the command.
@@ -165,20 +167,21 @@ window.addEventListener("keydown", (event) => {
  * @example
  * Command({
  *  command: "konnichiwa",
- *  alt_commands: ["hello", "hi"], // aliases
- *  description: "say hello",
- *  is_toggle: false, // you don't need to toggle on/off for a command to say "hello"
+ *  aliases: ["hello", "hi"],
+ *  command_name: "Konnichiwa (say hello)" // (optional) the name appear on the "help" command page
+ *  description: "say hello", // (optional)
+ *  is_toggle: false, // (optional) you don't need to toggle on/off for a command to say "hello"
  *  callback_fn: () => { logger.log("hello") } // calls everytime when user triggers
  * })
  */
-export const Command = ({ command, alt_commands, description, is_toggle, callback_fn }) => {
+export const Command = ({ command, aliases, command_name, description, is_toggle, callback_fn }) => {
   // check for correct type
   if (
     typeof command !== "string" ||
-    typeof alt_commands !== "object" ||
+    typeof aliases !== "object" ||
     typeof description !== "string" ||
     typeof callback_fn !== "function" ||
-    !Array.isArray(alt_commands)
+    !Array.isArray(aliases)
   ) return;
 
   // add command to the map
@@ -190,10 +193,18 @@ export const Command = ({ command, alt_commands, description, is_toggle, callbac
     return `the command ${command} has already been defined.`;
 
   // add command metadata
-  commands_metad.push({ command, alt_commands, description, is_toggle });
+  commands_metad.push({
+    command_name: (typeof command_name === "string" && command_name?.toString().replaceAll(" ") !== "")
+      ? command_name 
+      : command,
+    command,
+    aliases,
+    description,
+    is_toggle
+  });
 
   // for toggler
-  const command_enabled = store_get(`toggle.${command}`, false);
+  const command_enabled = store_get(`toggle.${b64_encode(command)}`, false);
   if (is_toggle === true)
     active_toggles.set(
       command,
@@ -207,7 +218,7 @@ export const Command = ({ command, alt_commands, description, is_toggle, callbac
   // it's not really a good practice to do this, but it can avoid command duplication
   // and the Map stores pointers for the function, so it should be fine to add them
   // into the map.
-  alt_commands.forEach(
+  aliases.forEach(
     (_alt) => {
       const alt = _alt?.toString()?.toLowerCase();
 
@@ -241,7 +252,8 @@ export const Command = ({ command, alt_commands, description, is_toggle, callbac
 // register useful function
 Command({
   command: "help",
-  alt_commands: ["h", "tasukete", "cmd", "cmds"],
+  aliases: ["h", "tasukete", "cmd", "cmds"],
+  command_name: "help",
   description: "get a list of commands",
   is_toggle: false, // help command shouldn't be a toggle
   callback_fn: () => {
