@@ -32,7 +32,10 @@ export const is_json = (str) => {
 // this function is created to avoid the client from getting response before the "after" hook finished assigning value
 const await_after_hook = async (env) => {
   // prevent from continue to the watcher to avoid wasting resources
-  if (env?.readyState === 4 && env?._kumiyui_finished === true)
+  if (
+    (env?.readyState === 4 && env?._kumiyui_finished === true) ||
+    env?._kumiyui_blocked === true
+  )
     return;
   
   // if already at ready state but "after" hook still haven't finished yet
@@ -42,7 +45,8 @@ const await_after_hook = async (env) => {
       env?._kumiyui_change_listeners.push(resolve);
 
       // if it finishes right after pushing or at the moment right before await new Promise(...) and between if check
-      if (env._kumiyui_finished === true) {
+      // if it's blocked, return normally
+      if (env._kumiyui_finished === true || env._kumiyui_blocked === true) {
         // clean up the listener
         const listener_index = env._kumiyui_change_listeners.indexOf(resolve);
         if (listener_index !== -1)
@@ -118,8 +122,15 @@ const _init_network_hook = () => {
             logger.error(`cannot execute hook listener on window.fetch() hook (type: "before"), error:`, e);
           }
 
-          if (typeof modification !== "undefined") {
-            // return false to block the network request (feature)
+          if (typeof modification !== "undefined") { 
+            // return false to drop the network request (feature)
+            //
+            // note: it only drops connection, the client might wait forever for a response.
+            // user should avoid using this method and return response with error instead.
+            //
+            // only use this when the client perform destructive action, like killing UI
+            // elements, ... By making it wait forever, the client will/might not delete
+            // the element or any interactive functions.
             if (modification === false) {
               short_circuit_response = undefined;
               is_execution_blocked = true;
@@ -295,9 +306,17 @@ const _init_network_hook = () => {
     new_value: class extends o_xhr {
       constructor() {
         super();
+        // basic xhr state
+        this._kumiyui_queued_headers = [];
+        this._kumiyui_is_opened = false;
+
+        // basic response data
         this._kumiyui_context = { args: ["", null], method: "GET", api: "xhr" };
         this._kumiyui_response = null;
         this._kumiyui_status = null;
+
+        // for dropping connection
+        this._kumiyui_blocked = false;
 
         // define kumiyui_finished with event listener like method
         const self = this;
@@ -327,17 +346,26 @@ const _init_network_hook = () => {
       async open(method, url, ...args) {
         this._kumiyui_context.method = method;
         this._kumiyui_context.args[0] = url;
+        const context = this._kumiyui_context;
 
-        // xhr "before"
+        // xhr "before" (the first time allows user to modify url or block url)
         for (const hook of hook_registry?.before) {
           try {
             const modification = await hook(context);
 
             if (typeof modification !== "undefined") {
-              // return false to block the network request (feature)
+              // return false to drop the network request (feature)
+              //
+              // note: it only drops connection, the client might wait forever for a response.
+              // user should avoid using this method and return response with error instead.
+              //
+              // only use this when the client perform destructive action, like killing UI
+              // elements, ... By making it wait forever, the client will/might not delete
+              // the element or any interactive functions.
               if (modification === false) {
-                this._kumiyui_response = undefined;
-                this._kumiyui_status = undefined;
+                this._kumiyui_response = null;
+                this._kumiyui_status = null;
+                this._kumiyui_blocked = true;
 
                 // empty the send function
                 _hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
@@ -364,31 +392,59 @@ const _init_network_hook = () => {
               break;
             }
           } catch (e) {
-            logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
+            logger.error(`cannot execute hook listener on XHR hook (type: "before", first call), error:`, e);
           }
         }
 
-        // start opening url
-        return super.open(method, this._kumiyui_context.args[0], ...args);
+        // start opening url natively
+        // open() needs to be called before setRequestHeader() to avoid error
+        const open_native = super.open(method, this._kumiyui_context.args[0], ...args);
+        
+        // try to set all queued headers
+        this._kumiyui_is_opened = true;
+        while (this._kumiyui_queued_headers.length > 0) {
+          // set the header based on the queued header
+          super.setRequestHeader(
+            ...this._kumiyui_queued_headers.shift()
+          )
+        }
+
+        // return open result
+        return open_native;
+      }
+
+      // modify setRequestHeader to avoid DOMException error
+      setRequestHeader(...args) {
+        if (!this._kumiyui_is_opened) {
+          this._kumiyui_queued_headers.push(args);
+        } else {
+          super.setRequestHeader(...args);
+        }
       }
 
       // return the spoofed response or original
       get response() {
         return this._kumiyui_response !== null
           ? this._kumiyui_response
-          : super.response
+          : (!this._kumiyui_blocked ? super.response : null) // returns default response if blocked
       }
 
       get responseText() {
         return this._kumiyui_response !== null
           ? this._kumiyui_response
-          : super.responseText
+          : (!this._kumiyui_blocked ? super.responseText : "") // returns default response if blocked
       }
 
       get status() {
         return this._kumiyui_status !== null
           ? this._kumiyui_status
-          : super.status
+          : (!this._kumiyui_blocked ? super.status : 0) // returns default response if blocked
+      }
+
+      get readyState() {
+        return this._kumiyui_blocked !== true
+          ? super.readyState
+          : 3; // make it stuck at loading state (the client waits forever at this stage)
       }
 
       // avoid client gets data before modified by "after" hooks
@@ -429,7 +485,7 @@ const _init_network_hook = () => {
         })
       }
 
-      // send function (uses for tracking "after" hooks)
+      // send function (uses for tracking "after" hooks and body for "before" hooks)
       async send(body) {
         this._kumiyui_context.args[1] = body;
         const context = this._kumiyui_context;
@@ -447,6 +503,56 @@ const _init_network_hook = () => {
           set(value) { this.args[1] = JSON.stringify(value) }
         })
 
+        // xhr "before" (the second time allows user to modify body data, but user cannot modify url)
+        for (const hook of hook_registry?.before) {
+          try {
+            const modification = await hook(context);
+
+            if (typeof modification !== "undefined") { 
+              // return false to drop the network request (feature)
+              //
+              // note: it only drops connection, the client might wait forever for a response.
+              // user should avoid using this method and return response with error instead.
+              //
+              // only use this when the client perform destructive action, like killing UI
+              // elements, ... By making it wait forever, the client will/might not delete
+              // the element or any interactive functions.
+              if (modification === false) {
+                this._kumiyui_response = null;
+                this._kumiyui_status = null;
+                this._kumiyui_blocked = true; 
+                break;
+              }
+
+              let _response = { status: 200, statusText: "OK", headers: new Headers() };
+
+              if (modification && typeof modification === "object") {
+                // update to the tampered data
+                ["status", "statusText", "headers"].forEach((_res_key) => {
+                  if (typeof modification[_res_key] !== "undefined")
+                    _response[_res_key] = modification[_res_key];
+                });
+
+                // body can be null, so restrict to only undefined
+                this._kumiyui_response = modification?.body !== undefined ? modification.body : null;
+              } else if (typeof modification === "string") {
+                this._kumiyui_response = modification;
+              }
+
+              // only execute the first hook
+              // read the documentation for more detail on how to register multiple hooks
+              break;
+            }
+          } catch (e) {
+            logger.error(`cannot execute hook listener on XHR hook (type: "before", second call), error:`, e);
+          }
+        }
+
+        // if the connection is blocked, there's no point to execute the "after" hook
+        if (this._kumiyui_blocked === true)
+          return;
+
+        // "after" hook
         if (hook_registry?.after?.length > 0) {
           super.addEventListener("readystatechange", async () => {
             if (this.readyState === 4) {
