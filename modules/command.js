@@ -1,5 +1,5 @@
-import Logger from "./logger";
-import store from "./store";
+import { Logger } from "./logger";
+import { get as store_get, set as store_set } from "./store";
 
 const prompt = window.prompt;
 const alert = window.alert;
@@ -25,7 +25,7 @@ const trigger_command_input = () => {
 
   // devtool help message
   if (command === "disabledevtoolhelp")
-    return store.set("kumiyui_disabledevtoolhelp", true);
+    return store_set("kumiyui_disabledevtoolhelp", true);
 
   // check for command's existance
   if (!commands.has(command))
@@ -56,7 +56,7 @@ const trigger_command_input = () => {
 
     // update status
     active_toggles.set(main_command, toggle_status);
-    store.set(`toggle.${main_command}`, toggle_status);
+    store_set(`toggle.${main_command}`, toggle_status);
     is_toggled = toggle_status;
   }
 
@@ -89,12 +89,12 @@ const userscript_menu = ({ command, is_toggle, menu_obj, is_enabled }) => {
     if (!is_toggle)
       return;
 
-    const prev_toggle_status = store.get(`toggle.${command}`) ?? false;
+    const prev_toggle_status = store_get(`toggle.${command}`) ?? false;
     const toggle_status = prev_toggle_status === true ? false : true;
 
     // set toggle state
     active_toggles.set(command, toggle_status);
-    store.set(`toggle.${command}`, toggle_status);
+    store_set(`toggle.${command}`, toggle_status);
  
     // get the command data
     const command_obj = commands.get(command);
@@ -171,7 +171,7 @@ window.addEventListener("keydown", (event) => {
  *  callback_fn: () => { logger.log("hello") } // calls everytime when user triggers
  * })
  */
-const Command = ({ command, alt_commands, description, is_toggle, callback_fn }) => {
+export const Command = ({ command, alt_commands, description, is_toggle, callback_fn }) => {
   // check for correct type
   if (
     typeof command !== "string" ||
@@ -193,7 +193,7 @@ const Command = ({ command, alt_commands, description, is_toggle, callback_fn })
   commands_metad.push({ command, alt_commands, description, is_toggle });
 
   // for toggler
-  const command_enabled = store.get(`toggle.${command}`, false);
+  const command_enabled = store_get(`toggle.${command}`, false);
   if (is_toggle === true)
     active_toggles.set(
       command,
@@ -246,7 +246,7 @@ Command({
   is_toggle: false, // help command shouldn't be a toggle
   callback_fn: () => {
     // always show this popup, i know this is annoying, but it's crucial
-    if (store.get("kumiyui_disabledevtoolhelp") !== true) {
+    if (store_get("kumiyui_disabledevtoolhelp") !== true) {
       alert("please open devtool to see output of the commands (you can either use F12 or Ctrl + Shift + I to open devtool)");
       alert("to disable this popup, you need to use the `disabledevtoolhelp` command so that the next time you run the `help` command, there will be no popup like this.");
     }
@@ -255,6 +255,3 @@ Command({
     console.table(commands_metad);
   }
 })
-
-// export the command function
-export default Command

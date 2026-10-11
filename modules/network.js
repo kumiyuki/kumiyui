@@ -1,10 +1,11 @@
-import Logger from "./logger"
-import _hook from "./hook"
+import { Logger } from "./logger"
+import { hook as _hook } from "./hook"
 
 const o_fetch = globalThis.fetch || window.fetch;
 const o_send_beacon = globalThis?.navigator?.sendBeacon || window?.navigator?.sendBeacon;
 const o_xhr = globalThis.XMLHttpRequest || window.XMLHttpRequest;
 const logger = new Logger({ name: "kumiyui:hook_masker", level: Logger.LEVELS.info });
+const mutex = new Mutex();
 
 /**
  * Check if a string is in JSON format
@@ -21,7 +22,7 @@ const logger = new Logger({ name: "kumiyui:hook_masker", level: Logger.LEVELS.in
  * is_json(true) // => false
  * is_json(0) // => false
  */
-const is_json = (str) => {
+export const is_json = (str) => {
   if (typeof str !== "string") return false;
   try {
     JSON.parse(str);
@@ -476,11 +477,6 @@ _init_network_hook();
  * register_network_hook("before", (context) => {});
  * register_network_hook("after", (context, result) => {})
  */
-const register_network_hook = (type, callback) => {
+export const register_network_hook = (type, callback) => {
   hook_registry[type]?.push(callback);
-}
-
-export default {
-  is_json,
-  register_network_hook
 }

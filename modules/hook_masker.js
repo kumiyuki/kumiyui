@@ -1,4 +1,4 @@
-import Logger from "./logger"
+import { Logger } from "./logger"
 const logger = new Logger({ name: "kumiyui:hook_masker", level: Logger.LEVELS.info });
 
 // mask some hooks
@@ -126,7 +126,7 @@ Element.prototype.appendChild = function (...args) {
  * // only call mask_hook() after hooking a function
  * mask_hook(window.fetch, "function fetch() { [native code] }");
  */
-const mask_hook = (fn, native_string) => {
+export const mask_hook = (fn, native_string) => {
   if (typeof fn !== "function") return;
   if (_hooks.has(fn)) return;
 
@@ -180,8 +180,4 @@ const mask_hook = (fn, native_string) => {
   } catch (e) {
     logger.error(`[kumiyui] failed to mask fn.toString()`, e);
   }
-}
-
-export default {
-  mask_hook
 }

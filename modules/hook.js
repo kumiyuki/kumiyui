@@ -1,4 +1,4 @@
-import hook_masker from "./hook_masker"
+import { hook_masker } from "./hook_masker"
 
 const o_fn_c = window?.Function?.prototype?.toString?.call?.bind(
   window?.Function?.prototype?.toString
@@ -38,7 +38,7 @@ const apply_raw_hook = ({ obj, prop, new_value, options, native_str }) => {
  *  options: { mask_hook: true, block_overwrite: true }
  * })
  */
-const hook = ({
+export const hook = ({
   obj,
   prop,
   new_value,
@@ -60,5 +60,3 @@ const hook = ({
   // apply the hook
   apply_raw_hook({ obj, prop, new_value, options, native_str });
 }
-
-export default hook;

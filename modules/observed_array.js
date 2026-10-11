@@ -11,7 +11,7 @@
 
 /**
  * An extended Array proxy that supports native event listeners for modifications.
- * 
+ *
  * @template T
  * @typedef {Array<T> & {
  *   addEventListener: (type: 'add' | 'remove', listener: (event: ArrayMutationEvent) => void) => void,
@@ -37,7 +37,7 @@
  * a.push({ id: 1 }); // Logs: Added: { id: 1 }
  */
 
-const create_observed_array = (target_arr = []) => {
+export const create_observed_array = (target_arr = []) => {
   const event_bus = new EventTarget();
 
   return new Proxy(target_arr, {
@@ -82,5 +82,3 @@ const create_observed_array = (target_arr = []) => {
     }
   })
 }
-
-export default create_observed_array;

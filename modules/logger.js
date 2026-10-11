@@ -8,7 +8,7 @@ const LEVELS_INT = new Map([
   [50, "ERROR"]
 ]);
 
-class Logger {
+export class Logger {
   static LEVELS = {
     trace: 10,
     debug: 20,
@@ -132,5 +132,3 @@ class Logger {
   warn(...args)  { this._log("warn", 40, args); }
   error(...args) { this._log("error", 50, args); }
 }
-
-export default Logger;
