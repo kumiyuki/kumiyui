@@ -311,7 +311,7 @@ const _init_network_hook = () => {
         this._kumiyui_is_opened = false;
 
         // basic response data
-        this._kumiyui_context = { args: ["", null], method: "GET", api: "xhr" };
+        this._kumiyui_context = { args: ["", null], method: "GET", api: "xhr", before_state: null };
         this._kumiyui_response = null;
         this._kumiyui_status = null;
 
@@ -346,6 +346,7 @@ const _init_network_hook = () => {
       async open(method, url, ...args) {
         this._kumiyui_context.method = method;
         this._kumiyui_context.args[0] = url;
+        this._kumiyui_context.before_state = "url";
         const context = this._kumiyui_context;
 
         // xhr "before" (the first time allows user to modify url or block url)
@@ -488,6 +489,7 @@ const _init_network_hook = () => {
       // send function (uses for tracking "after" hooks and body for "before" hooks)
       async send(body) {
         this._kumiyui_context.args[1] = body;
+        this._kumiyui_context.before_state = "body";
         const context = this._kumiyui_context;
 
         Object.defineProperty(context, "json", {
