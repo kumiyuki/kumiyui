@@ -494,7 +494,7 @@ const _init_network_hook = () => {
         xhr_hook_variables._kumiyui_context.before_state = "body";
         const context = xhr_hook_variables._kumiyui_context;
 
-        Object.defineProperty(context, "json", {
+        Object.defineProperty(this, "json", {
           get() {
             const r_body = xhr_hook_variables?._kumiyui_context?.args[1];
             if (typeof r_body === "string") {
@@ -558,41 +558,44 @@ const _init_network_hook = () => {
           return;
 
         // "after" hook
-        if (hook_registry?.after?.length > 0) {
-          super.addEventListener("readystatechange", async () => {
-            if (this.readyState === 4) {
-              let simulated_res = new Response(super.response, {
-                status: super.status,
-                statusText: super.statusText,
-                headers: new Headers((this.getAllResponseHeaders() || "").split("\r\n").reduce((acc, line) => {
-                  const [k, v] = line.split(": "); if (k) acc[k] = v; return acc;
-                }, {}))
-              })
+        super.addEventListener("readystatechange", async () => {
+          // check for hooks (it has to be in the event because registers might not be registered at the start)
+          if (hook_registry?.after?.length <= 0)
+            return;
 
-              for (const hook of hook_registry?.after) {
+          // only run on readyState
+          if (this.readyState === 4) {
+            let simulated_res = new Response(super.response, {
+              status: super.status,
+              statusText: super.statusText,
+              headers: new Headers((this.getAllResponseHeaders() || "").split("\r\n").reduce((acc, line) => {
+                const [k, v] = line.split(": "); if (k) acc[k] = v; return acc;
+              }, {}))
+            })
+
+            for (const hook of hook_registry?.after) {
+              try {
+                const clone = simulated_res.clone();
+                let mod = null;
                 try {
-                  const clone = simulated_res.clone();
-                  let mod = null;
-                  try {
-                    mod = await hook(context, clone);
-                  } catch (e) {
-                    logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
-                  }
-
-                  if (typeof mod !== "undefined") {
-                    xhr_hook_variables._kumiyui_response = mod?.body;
-                    if (typeof mod?.status !== "undefined")
-                      xhr_hook_variables._kumiyui_status = mod?.status;
-                  }
-
-                  xhr_hook_variables._kumiyui_finished = true;
+                  mod = await hook(context, clone);
                 } catch (e) {
-                  logger.error(`error on XHR hook (type: "after"), error:`, e);
+                  logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
                 }
+
+                if (typeof mod !== "undefined") {
+                  xhr_hook_variables._kumiyui_response = mod?.body;
+                  if (typeof mod?.status !== "undefined")
+                    xhr_hook_variables._kumiyui_status = mod?.status;
+                }
+
+                xhr_hook_variables._kumiyui_finished = true;
+              } catch (e) {
+                logger.error(`error on XHR hook (type: "after"), error:`, e);
               }
             }
-          })
-        }
+          }
+        })
 
         return super.send(context.args[1]);
       }
