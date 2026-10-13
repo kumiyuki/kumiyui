@@ -300,61 +300,67 @@ const _init_network_hook = () => {
   }
 
   // xhr hook
-  const xhr_hook_variables = {
-    // basic xhr state
-    _kumiyui_queued_headers: [],
-    _kumiyui_is_opened: false,
-
-    // basic response data
-    _kumiyui_context: { args: ["", null], method: "GET", api: "xhr", before_state: null },
-    _kumiyui_response: null,
-    _kumiyui_status: null,
-
-    // for dropping connection
-    _kumiyui_blocked: false,
-    
-    // for "after" hook event listener to resolve data
-    _kumiyui_change_listeners: [],
-    _kumiyui_finished: false
-  };
-
-  // define kumiyui_finished with event listener like method
-  let finished_state = false;
-  Object.defineProperty(xhr_hook_variables, "_kumiyui_finished", {
-    configurable: true,
-    enumerable: true,
-    get() { return finished_state },
-    set(new_value) {
-      // ignores redundant assignments
-      if (finished_state === new_value) return;
-      finished_state = new_value;
-
-      // if value turns true, notify all listener
-      if (new_value === true) {
-        while (xhr_hook_variables?._kumiyui_change_listeners.length > 0) {
-          const resolve_hook = xhr_hook_variables._kumiyui_change_listeners.shift();
-          if (typeof resolve_hook === "function")
-            resolve_hook();
-        }
-      }
-    }
-  })
+  // use weakmap for storing data and avoid private variables being exposed to website client side
+  const xhr_hook_map = new WeakMap();
 
   // start hooking
   _hook({
     obj: window,
     prop: "XMLHttpRequest",
     new_value: class extends o_xhr {
+      constructor() {
+        // create the xhr class normally
+        super();
+
+        // isolated storage for variables using weakmap
+        let finished_state = false;
+        const self = this;
+        xhr_hook_map.set(this, {
+          // basic xhr state
+          _kumiyui_queued_headers: [],
+          _kumiyui_has_to_queue_response: false,
+          _kumiyui_queued_response: null,
+          _kumiyui_is_opened: false,
+
+          // basic response data
+          _kumiyui_context: { args: ["", null], method: "GET", api: "xhr", before_state: null },
+          _kumiyui_response: null,
+          _kumiyui_status: null,
+
+          // for dropping connection
+          _kumiyui_blocked: false,
+          
+          // for "after" hook event listener to resolve data
+          _kumiyui_change_listeners: [],
+          
+          get _kumiyui_finished() { return finished_state },
+          set _kumiyui_finished(new_value) {
+            // ignores redundant assignments
+            if (finished_state === new_value) return;
+            finished_state = new_value;
+
+            // if value turns true, notify all listener
+            if (new_value === true) {
+              const state = xhr_hook_map.get(self);
+              while (state?._kumiyui_change_listeners.length > 0) {
+                const resolve_hook = state._kumiyui_change_listeners.shift();
+                if (typeof resolve_hook === "function")
+                  resolve_hook();
+              }
+            }
+          }
+        })
+      }
       async open(method, url, ...args) {
-        xhr_hook_variables._kumiyui_context.method = method;
-        xhr_hook_variables._kumiyui_context.args[0] = url;
-        xhr_hook_variables._kumiyui_context.before_state = "url";
-        const context = xhr_hook_variables._kumiyui_context;
+        const state = xhr_hook_map.get(this);
+        state._kumiyui_context.method = method;
+        state._kumiyui_context.args[0] = url;
+        state._kumiyui_context.before_state = "url";
 
         // xhr "before" (the first time allows user to modify url or block url)
         for (const hook of hook_registry?.before) {
           try {
-            const modification = await hook(context);
+            const modification = await hook(state._kumiyui_context);
 
             if (typeof modification !== "undefined") {
               // return false to drop the network request (feature)
@@ -366,9 +372,9 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                xhr_hook_variables._kumiyui_response = null;
-                xhr_hook_variables._kumiyui_status = null;
-                xhr_hook_variables._kumiyui_blocked = true;
+                state._kumiyui_response = null;
+                state._kumiyui_status = null;
+                state._kumiyui_blocked = true;
 
                 // empty the send function
                 _hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
@@ -385,9 +391,9 @@ const _init_network_hook = () => {
                 });
 
                 // body can be null, so restrict to only undefined
-                xhr_hook_variables._kumiyui_response = modification?.body !== undefined ? modification.body : null;
+                state._kumiyui_response = modification?.body !== undefined ? modification.body : null;
               } else if (typeof modification === "string") {
-                xhr_hook_variables._kumiyui_response = modification;
+                state._kumiyui_response = modification;
               }
 
               // only execute the first hook
@@ -401,15 +407,20 @@ const _init_network_hook = () => {
 
         // start opening url natively
         // open() needs to be called before setRequestHeader() to avoid error
-        const open_native = super.open(method, xhr_hook_variables._kumiyui_context.args[0], ...args);
+        const open_native = super.open(method, state._kumiyui_context.args[0], ...args);
         
         // try to set all queued headers
-        xhr_hook_variables._kumiyui_is_opened = true;
-        while (xhr_hook_variables._kumiyui_queued_headers.length > 0) {
+        state._kumiyui_is_opened = true;
+        while (state._kumiyui_queued_headers.length > 0) {
           // set the header based on the queued header
           super.setRequestHeader(
-            ...xhr_hook_variables._kumiyui_queued_headers.shift()
+            ...state._kumiyui_queued_headers.shift()
           )
+        }
+
+        // try to send all response after set all queued headers
+        if (state._kumiyui_has_to_queue_response === true) {
+          super.send(state._kumiyui_queued_response);
         }
 
         // return open result
@@ -418,34 +429,44 @@ const _init_network_hook = () => {
 
       // modify setRequestHeader to avoid DOMException error
       setRequestHeader(...args) {
-        if (!xhr_hook_variables._kumiyui_is_opened) {
-          xhr_hook_variables._kumiyui_queued_headers.push(args);
+        const state = xhr_hook_map.get(this);
+        if (!state._kumiyui_is_opened || super.readyState < 1) {
+          state._kumiyui_queued_headers.push(args);
         } else {
           super.setRequestHeader(...args);
+          try {
+            super.setRequestHeader(...args);
+          } catch (e) {
+            logger.error("cannot perform setRequestHeader() on xhr hook, error:", e)
+          }
         }
       }
 
       // return the spoofed response or original
       get response() {
-        return xhr_hook_variables._kumiyui_response !== null
-          ? xhr_hook_variables._kumiyui_response
-          : (!xhr_hook_variables._kumiyui_blocked ? super.response : null) // returns default response if blocked
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_response !== null
+          ? state._kumiyui_response
+          : (!state._kumiyui_blocked ? super.response : null) // returns default response if blocked
       }
 
       get responseText() {
-        return xhr_hook_variables._kumiyui_response !== null
-          ? xhr_hook_variables._kumiyui_response
-          : (!xhr_hook_variables._kumiyui_blocked ? super.responseText : "") // returns default response if blocked
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_response !== null
+          ? state._kumiyui_response
+          : (!state._kumiyui_blocked ? super.responseText : "") // returns default response if blocked
       }
 
       get status() {
-        return xhr_hook_variables._kumiyui_status !== null
-          ? xhr_hook_variables._kumiyui_status
-          : (!xhr_hook_variables._kumiyui_blocked ? super.status : 0) // returns default response if blocked
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_status !== null
+          ? state._kumiyui_status
+          : (!state._kumiyui_blocked ? super.status : 0) // returns default response if blocked
       }
 
       get readyState() {
-        return xhr_hook_variables._kumiyui_blocked !== true
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_blocked !== true
           ? super.readyState
           : 3; // make it stuck at loading state (the client waits forever at this stage)
       }
@@ -453,23 +474,40 @@ const _init_network_hook = () => {
       // avoid client gets data before modified by "after" hooks
       set onreadystatechange(on_state_change_fn) {
         super.onreadystatechange(async (..._o_args) => {
+          // get private storage
+          const state = xhr_hook_map.get(this);
+
           // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(xhr_hook_variables);
+          await await_after_hook(state);
 
           // so the "after" hook finished, call the requested listener
-          if (typeof on_state_change_fn === "function")
-            on_state_change_fn(..._o_args);
+          if (typeof on_state_change_fn === "function") {
+            try {
+              on_state_change_fn(..._o_args);
+            } catch (e) {
+              logger.error("cannot execute function onreadystatechange() on xhr hook, error:", e)
+            }
+          }
         });
       }
 
       set onload(onload_fn) {
         super.onload(async (..._o_args) => {
+          // get private storage
+          const state = xhr_hook_map.get(this);
+
           // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(xhr_hook_variables);
+          await await_after_hook(state);
 
           // so the "after" hook finished, call the requested listener
-          if (typeof onload_fn === "function")
+          if (typeof onload_fn === "function") {
             onload_fn(..._o_args);
+            try {
+              return super.send(context.args[1]);
+            } catch (e) {
+              logger.error("cannot execute function onload() on xhr hook, error:", e)
+            }
+          }
         });
       }
 
@@ -479,33 +517,44 @@ const _init_network_hook = () => {
           return super.addEventListener(...args);
         
         super.addEventListener(args[0], async (..._o_args) => {
+          // get private storage
+          const state = xhr_hook_map.get(this);
+
           // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(xhr_hook_variables);
+          await await_after_hook(state);
 
           // so the "after" hook finished, call the requested listener
-          if (typeof args[1] === "function")
-            args[1](..._o_args);
+          if (typeof args[1] === "function") {
+            try {
+              args[1](..._o_args);
+            } catch (e) {
+              logger.error("cannot execute function given on the second argument of addEventListener() at xhr hook, error:", e)
+            }
+          }
         })
       }
 
       // send function (uses for tracking "after" hooks and body for "before" hooks)
       async send(body) {
-        xhr_hook_variables._kumiyui_context.args[1] = body;
-        xhr_hook_variables._kumiyui_context.before_state = "body";
-        const context = xhr_hook_variables._kumiyui_context;
+        const state = xhr_hook_map.get(this);
+        state._kumiyui_context.args[1] = body;
+        state._kumiyui_context.before_state = "body";
+        const context = state._kumiyui_context;
 
         Object.defineProperty(this, "json", {
           get() {
-            const r_body = xhr_hook_variables?._kumiyui_context?.args[1];
+            const r_body = context?.args[1];
             if (typeof r_body === "string") {
               try {
                 return JSON.parse(r_body);
-              } catch (e) {}
+              } catch (e) {
+                logger.error("cannot parse JSON with json() at xhr hook, error:", e);
+              }
 
               return null;
             }
           },
-          set(value) { xhr_hook_variables._kumiyui_context.args[1] = JSON.stringify(value) }
+          set(value) { context.args[1] = JSON.stringify(value) }
         })
 
         // xhr "before" (the second time allows user to modify body data, but user cannot modify url)
@@ -523,9 +572,9 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                xhr_hook_variables._kumiyui_response = null;
-                xhr_hook_variables._kumiyui_status = null;
-                xhr_hook_variables._kumiyui_blocked = true; 
+                state._kumiyui_response = null;
+                state._kumiyui_status = null;
+                state._kumiyui_blocked = true; 
                 break;
               }
 
@@ -539,9 +588,9 @@ const _init_network_hook = () => {
                 });
 
                 // body can be null, so restrict to only undefined
-                xhr_hook_variables._kumiyui_response = modification?.body !== undefined ? modification.body : null;
+                state._kumiyui_response = modification?.body !== undefined ? modification.body : null;
               } else if (typeof modification === "string") {
-                xhr_hook_variables._kumiyui_response = modification;
+                state._kumiyui_response = modification;
               }
 
               // only execute the first hook
@@ -554,14 +603,16 @@ const _init_network_hook = () => {
         }
 
         // if the connection is blocked, there's no point to execute the "after" hook
-        if (xhr_hook_variables._kumiyui_blocked === true)
+        if (state._kumiyui_blocked === true)
           return;
 
         // "after" hook
         super.addEventListener("readystatechange", async () => {
           // check for hooks (it has to be in the event because registers might not be registered at the start)
-          if (hook_registry?.after?.length <= 0)
+          if (hook_registry?.after?.length <= 0) {
+            state._kumiyui_finished = true;
             return;
+          }
 
           // only run on readyState
           if (this.readyState === 4) {
@@ -584,12 +635,12 @@ const _init_network_hook = () => {
                 }
 
                 if (typeof mod !== "undefined") {
-                  xhr_hook_variables._kumiyui_response = mod?.body;
+                  state._kumiyui_response = mod?.body;
                   if (typeof mod?.status !== "undefined")
-                    xhr_hook_variables._kumiyui_status = mod?.status;
+                    state._kumiyui_status = mod?.status;
                 }
 
-                xhr_hook_variables._kumiyui_finished = true;
+                state._kumiyui_finished = true;
               } catch (e) {
                 logger.error(`error on XHR hook (type: "after"), error:`, e);
               }
@@ -597,7 +648,16 @@ const _init_network_hook = () => {
           }
         })
 
-        return super.send(context.args[1]);
+        if (!state._kumiyui_is_opened || super.readyState < 1) {
+          state._kumiyui_has_to_queue_response = true;
+          state._kumiyui_queued_response = context.args[1];
+        } else {
+          try {
+            return super.send(context.args[1]);
+          } catch (e) {
+            logger.error("cannot perform send() on xhr hook, error:", e)
+          }
+        }
       }
     },
     options: { mask_hook: true, block_overwrite: true }
