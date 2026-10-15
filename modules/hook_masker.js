@@ -25,7 +25,7 @@ const bypass_detection_hook = (hook_env) => {
         return o_fn_c(...args);
 
       if (_hooks.has(args[0]))
-        return _hooks.get(args[0]) || "[native code]";
+        return _hooks.get(args[0]) || "function() { [native code] }";
 
       return o_fn_c(...args);
     }
@@ -49,7 +49,7 @@ const bypass_detection_hook = (hook_env) => {
         return obj_fn_c(...args);
 
       if (_hooks.has(args[0]))
-        return _hooks.get(args[0]) ?? "function() { [native code] }";
+        return _hooks.get(args[0]) || "function() { [native code] }";
 
       return obj_fn_c(...args);
     }
