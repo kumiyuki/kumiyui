@@ -4,7 +4,7 @@ import * as Network from "./modules/network";
 import * as store from "./modules/store";
 
 // default module export
-export { Command } from "./modules/command";
+export { Command, set_prompt_trigger_input_keys } from "./modules/command";
 export { Logger } from "./modules/logger";
 
 // hooking export

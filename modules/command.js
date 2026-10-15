@@ -7,7 +7,7 @@ const prompt = window.prompt;
 const alert = window.alert;
 
 // keys to trigger input prompt
-const trigger_keys = new Set(["/", ":"]);
+let trigger_keys = new Set(["/", ":"]);
 
 // for storing temporary
 const commands = new Map();
@@ -297,3 +297,31 @@ Command({
     console.table(commands_metad);
   }
 })
+
+/**
+ * Set the keys for triggering command input prompt
+ * 
+ * @param {Set} input_keys_set 
+ * 
+ * @example
+ * // user has to press "/", ":", or ";" to trigger the input prompt
+ * set_trigger_input_keys( new Set(["/", ":", ";"]) );
+ * 
+ * // doing these will result in errors
+ * set_trigger_input_keys();
+ * set_trigger_input_keys(new Set([]));
+ */
+export const set_prompt_trigger_input_keys = (input_keys_set) => {
+  // make sure the sent data is a set
+  if (!(input_keys_set instanceof Set))
+    return logger.debug(`your new trigger keys is not a Set. please pass to the function: new Set([keybind, keybind_1])`);
+
+  // make sure the data is not empty
+  if (input_keys_set.size <= 0)
+    return logger.debug(
+      "you can't set empty keybinds for triggering input prompt!! current trigger_keys:", trigger_keys, "; your new trigger_keys:", input_keys_set
+    )
+
+  // set the new data
+  trigger_keys = input_keys_set;
+}
