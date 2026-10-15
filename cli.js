@@ -19,11 +19,13 @@ const gen_header = (config) => {
   ]
 
   // applying required grants
-  required_grants.forEach((perm) => {
-    const index = config?.["grant"]?.findIndex((el) => el === perm) ?? -1;
-    if (index === -1)
-      config["grant"].push(perm);
-  })
+  if (typeof config?.grant === "object" && Array.isArray(config?.grant)) {
+    required_grants.forEach((perm) => {
+      const index = config.grant.findIndex((el) => el === perm) ?? -1;
+      if (index === -1)
+        config.grant.push(perm);
+    })
+  }
 
   // must run at document-start for hooking at higher privilege
   config["run-at"] = "document-start";
