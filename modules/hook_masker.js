@@ -100,7 +100,7 @@ Element.prototype.appendChild = function (...args) {
               if (!win.Function.prototype.toString.toString().includes("[native code]"))
                 bypass_detection_hook(win);
             } catch (e) {
-              logger.warn("(you can safely ignore this warning) this is a cross-origin frame. direct manipulation from here is blocked by the browser. detailed log:", e);
+              logger.debug("(you can safely ignore this warning) this is a cross-origin frame. direct manipulation from here is blocked by the browser. detailed log:", e);
             }
           }
           return win;
