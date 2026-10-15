@@ -18,14 +18,18 @@ const gen_header = (config) => {
     "GM_unregisterMenuCommand"
   ]
 
+  // make sure grant array exist
+  if (
+    typeof config?.grant !== "object" ||
+    !Array.isArray(config?.grant)
+  ) config.grant = [];
+
   // applying required grants
-  if (typeof config?.grant === "object" && Array.isArray(config?.grant)) {
-    required_grants.forEach((perm) => {
-      const index = config.grant.findIndex((el) => el === perm) ?? -1;
-      if (index === -1)
-        config.grant.push(perm);
-    })
-  }
+  required_grants.forEach((perm) => {
+    const index = config.grant.findIndex((el) => el === perm) ?? -1;
+    if (index === -1)
+      config.grant.push(perm);
+  })
 
   // must run at document-start for hooking at higher privilege
   config["run-at"] = "document-start";
