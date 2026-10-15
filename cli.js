@@ -8,6 +8,26 @@ const gen_header = (config) => {
   let padding_len = 20;
   const advanced_metadata_keys = ["match", "include", "exclude", "exclude-match", "grant", "connect", "tag", "require", "resource"];
 
+  // hardcoded headers
+  // it's required because user might break the framework if missing these changes
+  // so even if you do something, please don't try to remove those permissions
+  const required_grants = [
+    "GM_setValue",
+    "GM_getValue",
+    "GM_registerMenuCommand",
+    "GM_unregisterMenuCommand"
+  ]
+
+  // applying required grants
+  required_grants.forEach((perm) => {
+    const index = config?.["grant"]?.findIndex((el) => el === perm) ?? -1;
+    if (index === -1)
+      config["grant"].push(perm);
+  })
+
+  // must run at document-start for hooking at higher privilege
+  config["run-at"] = "document-start";
+
   // render basic header
   const metadata_keys = Object.keys(config);
   for (const metad_key of metadata_keys) {
@@ -36,6 +56,12 @@ const gen_header = (config) => {
     // make sure it's an array
     if (!Array.isArray(data))
       continue;
+
+    // avoid remove all "grants" (permissions) by using "none"
+    // sorry, but this is required, or else some functions in the framework might break and malfunction
+    // if you plan to edit them, make sure to know what you are doing
+    if (advanced_metad_key === "grant" && content?.toString()?.toLowerCase().replaceAll(" ", "") === "none")
+      continue; // avoid adding grant: "none"
 
     // render metadata for the header
     data.forEach(

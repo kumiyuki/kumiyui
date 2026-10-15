@@ -95,8 +95,13 @@ Element.prototype.appendChild = function (...args) {
       Object.defineProperty(child, 'contentWindow', {
         get: function() {
           const win = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow').get.call(this);
-          if (win && !win.Function.prototype.toString.toString().includes("[native code]")) {
-             bypass_detection_hook(win);
+          if (win) {
+            try {
+              if (!win.Function.prototype.toString.toString().includes("[native code]"))
+                bypass_detection_hook(win);
+            } catch (e) {
+              logger.warn("(you can safely ignore this warning) this is a cross-origin frame. direct manipulation from here is blocked by the browser. detailed log:", e);
+            }
           }
           return win;
         },

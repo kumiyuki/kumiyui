@@ -324,10 +324,22 @@ const _init_network_hook = () => {
 
           // basic response data
           _kumiyui_context: { args: ["", null], method: "GET", api: "xhr", before_state: null },
-          _kumiyui_response: null,
-          _kumiyui_status: null,
+
+          // all data inside here should be null. send_to_server should be true by default
+          _kumiyui_response: {
+            status: null,
+            // also, statusText is kind of useless, there's really no need to modify it
+            statusText: null,
+            headers: null,
+            body: null,
+            responseType: null,
+            send_to_server: true
+          },
 
           // for dropping connection
+          // the difference between send_to_server and blocking is:
+          // - send_to_server allows to modify data and client can get the modified data
+          // - blocking doesn't allow the client to get any data, and makes the client wait forever with no sign of returning data
           _kumiyui_blocked: false,
           
           // for "after" hook event listener to resolve data
@@ -361,7 +373,7 @@ const _init_network_hook = () => {
         for (const hook of hook_registry?.before) {
           try {
             const modification = await hook(state._kumiyui_context);
-
+            let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
             if (typeof modification !== "undefined") {
               // return false to drop the network request (feature)
               //
@@ -373,7 +385,6 @@ const _init_network_hook = () => {
               // the element or any interactive functions.
               if (modification === false) {
                 state._kumiyui_response = null;
-                state._kumiyui_status = null;
                 state._kumiyui_blocked = true;
 
                 // empty the send function
@@ -381,19 +392,22 @@ const _init_network_hook = () => {
                 break;
               }
 
-              let _response = { status: 200, statusText: "OK", headers: new Headers() };
-
-              if (modification && typeof modification === "object") {
+              if (typeof modification === "object") {
                 // update to the tampered data
-                ["status", "statusText", "headers"].forEach((_res_key) => {
-                  if (typeof modification[_res_key] !== "undefined")
+                ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+                  if (modification[_res_key] !== undefined)
                     _response[_res_key] = modification[_res_key];
+                  else
+                      // send to server defaults to false if not set
+                      if (_res_key === "send_to_server")
+                        _response["send_to_server"] = false;
                 });
 
                 // body can be null, so restrict to only undefined
-                state._kumiyui_response = modification?.body !== undefined ? modification.body : null;
+                state._kumiyui_response = _response;
               } else if (typeof modification === "string") {
-                state._kumiyui_response = modification;
+                _response["body"] = modification;
+                state._kumiyui_response = _response;
               }
 
               // only execute the first hook
@@ -445,23 +459,59 @@ const _init_network_hook = () => {
       // return the spoofed response or original
       get response() {
         const state = xhr_hook_map.get(this);
-        return state._kumiyui_response !== null
-          ? state._kumiyui_response
-          : (!state._kumiyui_blocked ? super.response : null) // returns default response if blocked
+
+        // return the default response if not blocked and if body is not modified
+        if (state._kumiyui_response?.body === null)
+          return !state._kumiyui_blocked ? super.response : null;
+        
+        // if body has been modified, retrieve the modified data
+        const r_body = state._kumiyui_response?.body;
+        const headers = state._kumiyui_response?.headers || {};
+        const b_type = state._kumiyui_response?.responseType !== null
+          ? state._kumiyui_response?.responseType
+          : (!state._kumiyui_blocked ? super.responseType : null); // default value if in blocked state
+
+        // parsing
+        try {
+          switch(b_type) {
+            case "json":
+              return JSON.parse(r_body)
+            case "document":
+              return new DOMParser().parseFromString(r_body, "text/html")
+            case "arraybuffer":
+              return new TextEncoder().encode(r_body).buffer;
+            case "blob":
+              const content_type_header = headers["content-type"] || headers["Content-Type"] || "";
+              const mime_type = content_type_header.split(";")[0].replaceAll(" ", "") || "application/octet-stream";
+              return new Blob([r_body], { type: mime_type })
+            default:
+              return r_body // i don't know yet, but if no data type matched, then just return the raw body
+          }
+        } catch (e) {
+          logger.error(`failed to parse property response, maybe server sent a malformed response, error:`, e);
+          return null;
+        }
       }
 
       get responseText() {
         const state = xhr_hook_map.get(this);
-        return state._kumiyui_response !== null
-          ? state._kumiyui_response
+        return state._kumiyui_response?.body !== null
+          ? state._kumiyui_response.body
           : (!state._kumiyui_blocked ? super.responseText : "") // returns default response if blocked
       }
 
       get status() {
         const state = xhr_hook_map.get(this);
-        return state._kumiyui_status !== null
-          ? state._kumiyui_status
+        return state._kumiyui_response?.status !== null
+          ? state._kumiyui_response.status
           : (!state._kumiyui_blocked ? super.status : 0) // returns default response if blocked
+      }
+
+      get statusText() {
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_response?.statusText !== null
+          ? state._kumiyui_response.statusText
+          : (!state._kumiyui_blocked ? super.statusText : 0) // returns default response if blocked
       }
 
       get readyState() {
@@ -469,6 +519,22 @@ const _init_network_hook = () => {
         return state._kumiyui_blocked !== true
           ? super.readyState
           : 3; // make it stuck at loading state (the client waits forever at this stage)
+      }
+
+      getResponseHeader(...data) {
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_response?.headers !== null
+          ? (state._kumiyui_response.headers?.get ?? (() => {}))(...data)
+          : (!state._kumiyui_blocked ? super.getResponseHeader(...data) : null) // returns default response if blocked
+      }
+
+      // i don't know if i should allow pasing parameters?
+      // just keep it like this
+      getAllResponseHeaders(...data) {
+        const state = xhr_hook_map.get(this);
+        return state._kumiyui_response?.headers !== null
+          ? (state._kumiyui_response.headers?.getAll ?? (() => {}))(...data)
+          : (!state._kumiyui_blocked ? super.getAllResponseHeaders(...data) : "") // returns default response if blocked
       }
 
       // avoid client gets data before modified by "after" hooks
@@ -561,8 +627,8 @@ const _init_network_hook = () => {
         for (const hook of hook_registry?.before) {
           try {
             const modification = await hook(context);
-
-            if (typeof modification !== "undefined") { 
+            let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
+            if (typeof modification !== "undefined") {
               // return false to drop the network request (feature)
               //
               // note: it only drops connection, the client might wait forever for a response.
@@ -573,24 +639,26 @@ const _init_network_hook = () => {
               // the element or any interactive functions.
               if (modification === false) {
                 state._kumiyui_response = null;
-                state._kumiyui_status = null;
-                state._kumiyui_blocked = true; 
+                state._kumiyui_blocked = true;
                 break;
               }
 
-              let _response = { status: 200, statusText: "OK", headers: new Headers() };
-
               if (modification && typeof modification === "object") {
                 // update to the tampered data
-                ["status", "statusText", "headers"].forEach((_res_key) => {
-                  if (typeof modification[_res_key] !== "undefined")
+                ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+                  if (modification[_res_key] !== undefined)
                     _response[_res_key] = modification[_res_key];
+                  else
+                      // send to server defaults to false if not set
+                      if (_res_key === "send_to_server")
+                        _response["send_to_server"] = false;
                 });
 
                 // body can be null, so restrict to only undefined
-                state._kumiyui_response = modification?.body !== undefined ? modification.body : null;
+                state._kumiyui_response = _response;
               } else if (typeof modification === "string") {
-                state._kumiyui_response = modification;
+                _response["body"] = modification;
+                state._kumiyui_response = _response;
               }
 
               // only execute the first hook
@@ -634,10 +702,22 @@ const _init_network_hook = () => {
                   logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
                 }
 
-                if (typeof mod !== "undefined") {
-                  state._kumiyui_response = mod?.body;
-                  if (typeof mod?.status !== "undefined")
-                    state._kumiyui_status = mod?.status;
+                if (typeof mod === "object") {
+                  // update to the tampered data
+                  ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+                    if (mod[_res_key] !== undefined)
+                      _response[_res_key] = mod[_res_key];
+                    else
+                      // send to server defaults to false if not set
+                      if (_res_key === "send_to_server")
+                        _response["send_to_server"] = false;
+                  });
+
+                  // body can be null, so restrict to only undefined
+                  state._kumiyui_response = _response;
+                } else if (typeof mod === "string") {
+                  _response["body"] = mod;
+                  state._kumiyui_response = _response;
                 }
 
                 state._kumiyui_finished = true;
@@ -653,6 +733,13 @@ const _init_network_hook = () => {
           state._kumiyui_queued_response = context.args[1];
         } else {
           try {
+            // check if it's not blocked or prohibited from sending to the server
+            if (
+              state._kumiyui_blocked === true ||
+              state._kumiyui_response?.send_to_server === false
+            ) return;
+
+            // try to send it
             return super.send(context.args[1]);
           } catch (e) {
             logger.error("cannot perform send() on xhr hook, error:", e)
