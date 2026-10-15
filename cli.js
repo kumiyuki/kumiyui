@@ -63,18 +63,20 @@ const gen_header = (config) => {
     if (!Array.isArray(data))
       continue;
 
-    // avoid remove all "grants" (permissions) by using "none"
-    // sorry, but this is required, or else some functions in the framework might break and malfunction
-    // if you plan to edit them, make sure to know what you are doing
-    if (
-      advanced_metad_key === "grant" &&
-      data.filter((el) => el?.toString().toLowerCase().replaceAll(" ", "") === "none").length > 0
-    ) continue; // avoid adding grant: "none"
-
     // render metadata for the header
-    data.forEach(
-      content => header += `// @${advanced_metad_key}`.padEnd(padding_len, " ") + `${content}\n`
-    )
+    data.forEach((content) => {
+      // a bit of overhead to avoid removing all permissions.
+      // avoid remove all "grants" (permissions) by using "none"
+      // sorry, but this is required, or else some functions in the framework might break and malfunction
+      // if you plan to edit them, make sure to know what you are doing
+      if (
+        advanced_metadata_keys === "grant" &&
+        content?.toString().toLowerCase().replaceAll(" ", "") === "none"
+      ) return;
+
+      // adding header
+      header += `// @${advanced_metad_key}`.padEnd(padding_len, " ") + `${content}\n`
+    })
   }
 
   // return header
