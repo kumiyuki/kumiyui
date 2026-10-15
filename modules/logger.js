@@ -1,3 +1,6 @@
+// console obj
+const console = window.console;
+
 // for O(1) check with .has()
 const VALID_LEVELS = new Set([10, 20, 30, 40, 50, Infinity]);
 const LEVELS_INT = new Map([
