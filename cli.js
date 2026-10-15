@@ -70,7 +70,7 @@ const gen_header = (config) => {
       // sorry, but this is required, or else some functions in the framework might break and malfunction
       // if you plan to edit them, make sure to know what you are doing
       if (
-        advanced_metadata_keys === "grant" &&
+        advanced_metad_k === "grant" &&
         content?.toString().toLowerCase().replaceAll(" ", "") === "none"
       ) return;
 
