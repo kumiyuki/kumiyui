@@ -3,7 +3,9 @@
 // i have minified some parts in the class
 const document = window.document;
 
-// i will keep the code below this original, and what the LLM writes
+// i will keep the code below as original as possible, and what the LLM writes
+// but i have updated it a bit and added methods to avoid other event listeners
+// from interupting the input
 /*
  * Highly-Optimized Mobile Command Terminal Component (With .debug and .table)
  * Contributed by Gemini (Google AI) via prompt assistance.
@@ -51,6 +53,11 @@ export class DropInConsole {
     this.inputField.placeholder = 'Type framework command...';
     this.inputField.style.cssText = 'flex:1;background:#252525;border:1px solid #444;color:#0f0;font-family:monospace;font-size:14px;padding:8px 10px;border-radius:4px;outline:none;';
     this.inputField.addEventListener('keydown', (e) => {
+      // avoid page from capturing request
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // normal input
       if (e.key === 'Enter' && this.inputField.value) {
         const cmd = this.inputField.value.trim();
         if (cmd) {
@@ -59,7 +66,15 @@ export class DropInConsole {
           this.inputField.value = '';
         }
       }
-    });
+    }, { capture: true });
+
+    // blocking events from leaking out
+    ["input", "keyup", "change"].forEach((event) => {
+      this.inputField.addEventListener(event, (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }, { capture: true })
+    })
 
     inputContainer.appendChild(this.inputField);
     container.appendChild(header);

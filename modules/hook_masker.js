@@ -65,7 +65,7 @@ const bypass_detection_hook = (hook_env) => {
 }
 
 // for standard window
-bypass_detection_hook(window);
+bypass_detection_hook(unsafeWindow || window);
 
 // iframe hook
 // to hook iframe, you are REQUIRED to use "@run-at document-start"

@@ -1,15 +1,23 @@
 import { mask_hook } from "./hook_masker"
+import { Logger } from "./logger";
 
 const o_fn_c = window?.Function?.prototype?.toString?.call?.bind(
   window?.Function?.prototype?.toString
 );
 
+// logger
+const logger = new Logger({ name: "kumiyui:hook", level: Logger.LEVELS.info });
+
 const apply_raw_hook = ({ obj, prop, new_value, options, native_str }) => {
   // perform hooking
-  Object.defineProperty(obj, prop, {
-    value: new_value,
-    writable: options?.block_overwrite === true ? false : true
-  })
+  try {
+    Object.defineProperty(obj, prop, {
+      value: new_value,
+      writable: options?.block_overwrite === true ? false : true
+    })
+  } catch (e) {
+    logger.error(`failed to hook ${obj}[${prop}], error:`, e);
+  }
 
   // call mask_hook if user allows to
   // only call if obj[prop] is a function (we know it through native_str being passed from the hook function)
