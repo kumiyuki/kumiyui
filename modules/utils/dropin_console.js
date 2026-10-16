@@ -84,11 +84,32 @@ export class DropInConsole {
     
     // add the host to body
     // i don't know a better way that can avoid race condition
-    try {
+    let is_added = false;
+    const append_host = () => {
+      if (is_added || !document.body) return;
       document.body.appendChild(host);
-    } catch {
-      document.addEventListener("DOMContentLoaded", () => {
-        document.body.appendChild(host);
+      is_added = true;
+    }
+    
+    if (document.body) {
+      append_host();
+    } else {
+      const _obs = new MutationObserver((mutations, obs) => {
+        if (document.body) {
+          append_host();
+          obs.disconnect();
+        }
+      })
+
+      _obs.observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+
+      window.addEventListener("DOMContentLoaded", () => {
+        if (document.body)
+          append_host();
+        _obs.disconnect();
       })
     }
 
