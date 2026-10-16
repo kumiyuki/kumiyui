@@ -18,8 +18,15 @@ const commands_metad = [];
 // logger
 const logger = new Logger({ name: "kumiyui:command", level: Logger.LEVELS.info });
 
-const trigger_command_input = () => {
-  const user_input = prompt("input command:")?.toString();
+/**
+ * 
+ * @param {string} command_str - (optional) you don't need to pass this, and only pass it if you want to call specific command
+ * @returns 
+ */
+export const trigger_command_input = (command_str) => {
+  const user_input = typeof command_str !== "string"
+    ? prompt("input command:")?.toString()
+    : command_str;
 
   // make sure the input is a valid string
   if (
@@ -294,7 +301,7 @@ Command({
     }
 
     // output all commands
-    console.table(commands_metad);
+    logger.table(commands_metad);
   }
 })
 
