@@ -81,7 +81,16 @@ export class DropInConsole {
     container.appendChild(this.output);
     container.appendChild(inputContainer);
     shadow.appendChild(container);
-    document.body.appendChild(host);
+    
+    // add the host to body
+    // i don't know a better way that can avoid race condition
+    try {
+      document.body.appendChild(host);
+    } catch {
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.appendChild(host);
+      })
+    }
 
     this.panel = container;
   }
