@@ -7,7 +7,7 @@ const author = JSON.parse(fs.readFileSync("./package.json", "utf-8"))?.author?.n
 
 // gplv3 header
 const gpl_v3_notice = `/**
- * <one line to give the program's name and a brief idea of what it does.>
+ * kumiyui
  * Copyright (C) ${year} ${author}
  * 
  * This program is free software: you can redistribute it and/or modify
