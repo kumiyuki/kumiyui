@@ -1,12 +1,14 @@
-name: build and deploy to git tag
+name: automated release
 
 on:
   push:
-    tags:
-      - "v*" # triggers whenever tag like vx.y.z get pushed
+    branches:
+      - main # triggers when new commit(s) get pushed or merged to main
+    paths:
+      - "package.json" # only start if package.json included in the commit(s) to avoid wasting resource usage
 
 jobs:
-  build-and-push:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,8 +16,16 @@ jobs:
     steps:
       - name: checkout source code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      
+      - name: check if version changed
+        id: check_version
+        uses: bndneto/package-version-changed@v1
+      
+      - name: short-circuit if no version update
+        if: steps.check_version.outputs.changed == 'false'
+        run: |
+          echo "no package.json version change detected. skipping build and deployment."
+          exit 0
       
       - name: setup bun environment
         uses: oven-sh/setup-bun@v2
@@ -26,14 +36,17 @@ jobs:
       - name: compile global cdn bundle
         run: bun run ./cdn_build/build_cdn.js
       
-      - name: commit and push minified file back to the tag
+      - name: get version from package.json
+        id: package_version
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # forces add the built file even if it's in the .gitignore
-          git add -f ./cdn_build/dist/kumiyui.min.js
-
-          # amend or push the build directly back to the release tag
-          git commit -m "chore(release): compile cdn assets" || exit 0
-          git push origin HEAD:${{ github.ref }} --force
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: create and upload github release assets
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./cdn_build/dist/kumiyui.js, ./cdn_build/dist/kumiyui.min.js"
+          tag: ${{ steps.package_version.outputs.version }}
+          name: "Release ${{ steps.package_version.outputs.version }}"
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
