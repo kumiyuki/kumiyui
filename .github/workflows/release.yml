@@ -24,7 +24,7 @@ jobs:
         run: bun install
       
       - name: compile global cdn bundle
-        run: bun run ./cdn_build/build-cdn.js
+        run: bun run ./cdn_build/build_cdn.js
       
       - name: commit and push minified file back to the tag
         run: |
