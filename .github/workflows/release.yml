@@ -1,0 +1,39 @@
+name: build and deploy to git tag
+
+on:
+  push:
+    tags:
+      - "v*" # triggers whenever tag like vx.y.z get pushed
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: setup bun environment
+        uses: oven-sh/setup-bun@v2
+      
+      - name: install dependencies
+        run: bun install
+      
+      - name: compile global cdn bundle
+        run: bun run ./cdn_build/build-cdn.js
+      
+      - name: commit and push minified file back to the tag
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # forces add the built file even if it's in the .gitignore
+          git add -f ./cdn_build/dist/kumiyui.min.js
+
+          # amend or push the build directly back to the release tag
+          git commit -m "chore(release): compile cdn assets" || exit 0
+          git push origin HEAD:${{ github.ref }} --force

@@ -102,6 +102,7 @@ const buildScript = async ({ bundle_kumiyui, external_package, minify, ignore_us
     minify: minify,
     external: !bundle_kumiyui ? ["kumiyui"] : [],
     packages: external_package ? "external" : undefined, // leaves undefined so it makes Bun.build uses the default value
+    format: !bundle_kumiyui ? "iife" : undefined, // leaves undefined so it makes Bun.build uses the default value
   })
 
   if (!result.success) {
