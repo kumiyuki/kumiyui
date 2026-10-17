@@ -17,16 +17,6 @@ jobs:
       - name: checkout source code
         uses: actions/checkout@v4
       
-      - name: check if version changed
-        id: check_version
-        uses: bndneto/package-version-changed@v1
-      
-      - name: short-circuit if no version update
-        if: steps.check_version.outputs.changed == 'false'
-        run: |
-          echo "no package.json version change detected. skipping build and deployment."
-          exit 0
-      
       - name: setup bun environment
         uses: oven-sh/setup-bun@v2
       
