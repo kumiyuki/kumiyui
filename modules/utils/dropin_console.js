@@ -127,6 +127,7 @@ export class DropInConsole {
   }
 
   log(...args) { this.printLevel('log', ...args); }
+  info(...args) { this.printLevel('log', ...args); }
   warn(...args) { this.printLevel('warn', ...args); }
   error(...args) { this.printLevel('error', ...args); }
   debug(...args) { this.printLevel('debug', ...args); } // Added .debug level
