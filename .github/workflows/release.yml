@@ -12,31 +12,42 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: checkout source code
         uses: actions/checkout@v4
-      
+
       - name: setup bun environment
         uses: oven-sh/setup-bun@v2
-      
+
       - name: install dependencies
         run: bun install
-      
+
       - name: compile global cdn bundle
         run: bun run ./cdn_build/build_cdn.js
-      
+
       - name: get version from package.json
         id: package_version
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=v$VERSION" >> $GITHUB_OUTPUT
-      
+
+      - name: commit build assets to main branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+ 
+          git add -f ./cdn_build/dist/kumiyui.js
+          git add -f ./cdn_build/dist/kumiyui.min.js
+
+          git commit -m "chore(release): compile distribution files for ${{ steps.package_version.outputs.version }} [skip ci]" || exit 0
+          git push origin main
+
       - name: create and upload github release assets
         uses: ncipollo/release-action@v1
         with:
           artifacts: "./cdn_build/dist/kumiyui.js, ./cdn_build/dist/kumiyui.min.js"
           tag: ${{ steps.package_version.outputs.version }}
-          name: "Release ${{ steps.package_version.outputs.version }}"
+          name: "${{ steps.package_version.outputs.version }}"
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
