@@ -7,7 +7,17 @@ const prompt = window.prompt;
 const alert = window.alert;
 
 // keys to trigger input prompt
-let trigger_keys = new Set(["/", ":"]);
+const required_props = ["altKey", "ctrlKey", "shiftKey"]
+let trigger_keys = new Map([
+  [
+    ":",
+    {
+      altKey: false,
+      ctrlKey: false,
+      shiftKey: true,
+    }
+  ]
+]);
 
 // for storing temporary
 const commands = new Map();
@@ -40,8 +50,8 @@ export const trigger_command_input = (command_str) => {
   const args = split_input.splice(1);
 
   // devtool help message
-  if (command === "disabledevtoolhelp")
-    return store_set("kumiyui_disabledevtoolhelp", true);
+  if (command === "kumiyui.disabledevtoolhelp")
+    return store_set("kumiyui_internal_set__disabledevtoolhelp", true);
 
   // check for command's existance
   if (!commands.has(command))
@@ -168,8 +178,28 @@ window.addEventListener("keydown", (event) => {
   ) return;
 
   // checking keys
-  if (trigger_keys.has(event.key.toLowerCase()))
+  const e_key = event.key.toLowerCase();
+  if (trigger_keys.has(e_key)) {
+    const requirements = trigger_keys.get(e_key);
+
+    // check if matches all requirements
+    for (const require_key of Object.keys(requirements)) {
+      // this is already checked so just ignore it
+      if (require_key === "key") continue;
+
+      /// check for requirement
+      if (event[require_key] !== requirements[require_key])
+        return;
+    }
+
+    // the triggered key is valid, needs to prevent browser and web's default behavior
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    // run the command
     trigger_command_input();
+  }
 })
 
 // definition of callback_fn()
@@ -224,10 +254,15 @@ export const Command = ({ command, aliases, command_name, description, is_toggle
   // add command to the map
   command = command?.toString()?.toLowerCase();
 
+  // special command must not be registered
+  if (command === "kumiyui.disabledevtoolhelp")
+    return logger.debug("you cannot register kumiyui.disabledevtoolhelp because it's a framework command.")
+
+  // check if command already exist
   if (!commands.has(command))
     commands.set(command, callback_fn);
   else
-    return `the command ${command} has already been defined.`;
+    return logger.debug(`the command ${command} has already been defined.`);
 
   // add command metadata
   commands_metad.push({
@@ -235,7 +270,7 @@ export const Command = ({ command, aliases, command_name, description, is_toggle
       ? command_name 
       : command,
     command,
-    aliases,
+    aliases: aliases.join("; "),
     description,
     is_toggle
   });
@@ -264,7 +299,7 @@ export const Command = ({ command, aliases, command_name, description, is_toggle
       if (!commands.has(alt))
         commands.set(alt, aliases_obj);
       else
-        return `failed to define alternative command because the command ${command} has already been defined.`;
+        return logger.debug(`failed to define alternative command because the command ${command} has already been defined.`);
     }
   )
 
@@ -286,18 +321,18 @@ export const Command = ({ command, aliases, command_name, description, is_toggle
   }
 }
 
-// register useful function
+// register useful commands
 Command({
   command: "help",
-  aliases: ["h", "tasukete", "cmd", "cmds"],
+  aliases: ["h", "tasukete", "cmd", "cmds", "kumiyui:cmd", "kumiyui::cmd", "kumiyui:cmds", "kumiyui::cmds"],
   command_name: "help",
   description: "get a list of commands",
   is_toggle: false, // help command shouldn't be a toggle
   callback_fn: () => {
     // always show this popup, i know this is annoying, but it's crucial
-    if (store_get("kumiyui_disabledevtoolhelp") !== true) {
-      alert("please open devtool to see output of the commands (you can either use F12 or Ctrl + Shift + I to open devtool)");
-      alert("to disable this popup, you need to use the `disabledevtoolhelp` command so that the next time you run the `help` command, there will be no popup like this.");
+    if (store_get("kumiyui_internal_set__disabledevtoolhelp") !== true) {
+      alert(`please open console by using "kumiyui!c" command or use devtool's console (from browser).`);
+      alert(`to disable this popup before "help" command, you need to use the "kumiyui.disabledevtoolhelp" command.`);
     }
 
     // output all commands
@@ -305,30 +340,127 @@ Command({
   }
 })
 
+let ui_console = null;
+export const _set_drop_in_console = (drop_in_console) =>
+  ui_console = drop_in_console;
+
+Command({
+  command: "kumiyui.console",
+  aliases: ["kumiyui.c", "kumiyui!console", "kumiyui!c", "kumiyui:console", "kumiyui:c", "kumiyui::console", "kumiyui::c"],
+  command_name: "kumiyui.console",
+  description: "toggle DropInConsole module",
+  is_toggle: false, // help command shouldn't be a toggle
+  callback_fn: () => {
+    // make sure ui_console.toggle is a function
+    if (typeof ui_console.toggle === "function")
+      ui_console.toggle();
+  }
+})
+
 /**
- * Set the keys for triggering command input prompt
- * 
- * @param {Set} input_keys_set 
+ * Add the key for triggering command input prompt
+ *
+ * @param {string} key - the trigger key, it resembles InputEvent's "code" property (InputEvent.code) (e.g. "/", ";") 
+ * @param {Object} input_event_obj - resembles InputEvent's property (for example: InputEvent has ctrlKey, shiftKey, and altKey, you have to define input_event_obj to has those properties)
  * 
  * @example
- * // user has to press "/", ":", or ";" to trigger the input prompt
- * set_trigger_input_keys( new Set(["/", ":", ";"]) );
+ * // user has to press "/", or ";" to trigger the input prompt
+ * add_prompt_trigger_input_key("/", {
+ *  ctrlKey: false,
+ *  shiftKey: false,
+ *  altKey: false
+ * })
  * 
- * // doing these will result in errors
- * set_trigger_input_keys();
- * set_trigger_input_keys(new Set([]));
+ * // for example: user has to press ":" to trigger the input prompt
+ * // note: you need to make shiftKey: true so that the input prompt
+ * // can be triggered.
+ * add_prompt_trigger_input_key(":", {
+ *  ctrlKey: false,
+ *  shiftKey: true,
+ *  altKey: false
+ * })
+ * 
+ * // note: you can't do register Shift + ";" because InputEvent's "key" property
+ * // will turn Shift + ":" to ":" with shiftKey property being `true` (in boolean)
+ * // if you want user to press Shift + ";" trigger, you will have to set ":" with
+ * // shiftKey property as `true`.
+ * add_prompt_trigger_input_key(";", { // you have to use ":" here
+ *  ctrlKey: false,
+ *  shiftKey: true,
+ *  altKey: false
+ * })
+ * 
+ * // if you miss one property, the trigger key won't be registered
+ * add_prompt_trigger_input_key("/", {
+ *  ctrlKey: false,
+ *  altKey: false
+ * })
  */
-export const set_prompt_trigger_input_keys = (input_keys_set) => {
-  // make sure the sent data is a set
-  if (!(input_keys_set instanceof Set))
-    return logger.debug(`your new trigger keys is not a Set. please pass to the function: new Set([keybind, keybind_1])`);
+export const add_prompt_trigger_input_key = (key, input_event_obj) => {
+  // key must be in string type
+  if (typeof key !== "string")
+    return;
+  const input_key = key?.toString().toLowerCase().replaceAll(" ", "");
 
-  // make sure the data is not empty
-  if (input_keys_set.size <= 0)
-    return logger.debug(
-      "you can't set empty keybinds for triggering input prompt!! current trigger_keys:", trigger_keys, "; your new trigger_keys:", input_keys_set
-    )
+  // reject if already in the trigger_keys
+  if (trigger_keys.has(input_key))
+    return logger.debug(`the trigger key "${key}" already in the database.`);
 
-  // set the new data
-  trigger_keys = input_keys_set;
+  // must be an Object before continue
+  if (!(input_key_obj instanceof Object))
+    return;
+
+  // must have the required props
+  for (const prop of required_props) {
+    if (typeof input_key_obj[prop] !== "undefined")
+      return logger.debug(`missing property ${prop} in input_event_obj, note: input_event_obj resembles the InputEvent's properties (if you think about it, isn't ${prop} in InputEvent too?).`)
+  }
+
+  // add to trigger keys
+  trigger_keys.set(input_key, input_event_obj)
+}
+
+/**
+ * Remove the key for triggering command input prompt
+ *
+ * @param {string} key - the trigger key, it resembles InputEvent's "code" property (InputEvent.code) (e.g. "/", ";")
+ * 
+ * @example
+ * // note: you are allowed to removed the default ":" trigger key.
+ * 
+ * // remove the key ":" from trigger keys
+ * remove_prompt_trigger_input_key(":")
+ */
+export const remove_prompt_trigger_input_keys = (key) => {
+  // key must be in string type
+  if (typeof key !== "string")
+    return;
+  const input_key = key?.toString().toLowerCase().replaceAll(" ", "");
+
+  // reject if already in the trigger_keys
+  if (trigger_keys.has(input_key))
+    return logger.debug(`the trigger key "${key}" already in the database.`);
+
+  // remove it
+  trigger_keys.delete(input_key);
+}
+
+/**
+ * Check whether the key for triggering command input prompt exist
+ *
+ * @param {string} key - the trigger key, it resembles InputEvent's "code" property (InputEvent.code) (e.g. "/", ";") 
+ * 
+ * @example
+ * has_prompt_trigger_input_key(":") // return true
+ * has_prompt_trigger_input_key(false) // return undefined (because not in string type)
+ */
+export const has_prompt_trigger_input_key = (key) => {
+  // key must be in string type
+  if (typeof key !== "string")
+    return;
+
+  // return status
+  return trigger_keys.has(key?.toString().toLowerCase().replaceAll(" ", ""))
+    ? true
+    : false;
 }

@@ -8,11 +8,20 @@ import * as store from "./modules/store";
 // please import _set_trigger_command_input before _trigger_comand_input
 // if the logger module loads after the logger module, the framework won't load and throw error
 import { _set_trigger_command_input } from "./modules/logger";
-import { trigger_command_input } from "./modules/command";
-_set_trigger_command_input(trigger_command_input);
+import { trigger_command_input, _set_drop_in_console } from "./modules/command";
+_set_drop_in_console(
+  _set_trigger_command_input(
+    trigger_command_input
+  )
+)
 
 // default module export
-export { Command, set_prompt_trigger_input_keys } from "./modules/command";
+export {
+  Command,
+  has_prompt_trigger_input_key,
+  add_prompt_trigger_input_key,
+  remove_prompt_trigger_input_keys
+} from "./modules/command";
 export { Logger } from "./modules/logger";
 
 // hooking export

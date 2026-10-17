@@ -173,8 +173,10 @@ export class Logger {
 // the DropInConsole class is written by LLM
 // i'm sorry, I'm not good at designing so i let LLM do it instead
 
-export const _set_trigger_command_input = (trigger_command_input) =>
+export const _set_trigger_command_input = (trigger_command_input) => {
   ui_console = new DropInConsole(trigger_command_input);
+  return ui_console;
+}
 
 // on mobile, we can't use triggers to open the command prompt.
 // so, we need to add a button for it
