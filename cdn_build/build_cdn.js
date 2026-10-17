@@ -25,7 +25,19 @@ const gpl_v3_notice = `/**
  */
 `
 
-// biuld the framework for browser
+// build the framework for browser
+// unminified build
+await Bun.build({
+  entrypoints: ["./kumiyui.bundle.js"],
+  outdir: "./cdn_build/dist",
+  naming: "kumiyui.js",
+  target: "browser",
+  format: "iife",
+  minify: false,
+  banner: gpl_v3_notice
+})
+
+// minify build
 await Bun.build({
   entrypoints: ["./kumiyui.bundle.js"],
   outdir: "./cdn_build/dist",

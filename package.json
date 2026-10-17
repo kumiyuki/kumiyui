@@ -10,6 +10,9 @@
   "bin": {
     "kumiyui": "./cli.js"
   },
+  "scripts": {
+    "build": "bun ./cdn_build/build_cdn.js"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   }
