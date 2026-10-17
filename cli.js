@@ -84,7 +84,7 @@ const gen_header = (config) => {
   return header;
 }
 
-const buildScript = async ({ minify, config, entry_file, outp_file }) => {
+const buildScript = async ({ minify, ignore_use_strict, config, entry_file, outp_file }) => {
   console.log("build project based on kumiyui");
 
   // using bun's build api
@@ -101,7 +101,8 @@ const buildScript = async ({ minify, config, entry_file, outp_file }) => {
 
   // bundle header + code
   const bundled_code = await result.outputs[0].text();
-  const bundled_outp = gen_header(config) + bundled_code;
+  const use_strict_text = !ignore_use_strict ? `"use strict";\n` : "";
+  const bundled_outp = gen_header(config) + use_strict_text + bundled_code;
 
   // create dist if doesn't exist
   // avoid toctou stuff by doing this
@@ -121,6 +122,7 @@ const main = async () => {
 
   // a flag for minify build
   const minify = process.argv.includes("--minify");
+  const ignore_use_strict = process.argv.includes("--ignore-use-strict");
 
   if (args[0] !== "build")
     return console.log("unknown command, try: kumiyui build");
@@ -144,6 +146,7 @@ const main = async () => {
   console.log(`building ${entry_file}...`);
   await buildScript({
     minify,
+    ignore_use_strict,
     config: config?.headers || {},
     entry_file,
     outp_file
