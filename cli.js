@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const MAX_PADDING_LEN = 50;
-const FRAMEWORK_CDN = "https://cdn.jsdelivr.net/gh/kumiyuki/kumiyui@HEAD/kumiyui.bundle.js";
+const FRAMEWORK_CDN = "https://cdn.jsdelivr.net/gh/kumiyuki/kumiyui@HEAD/cdn_build/dist/kumiyui.min.js";
 const gen_header = (config, bundle_kumiyui) => {
   let header = "// ==UserScript==\n";
   let padding_len = 20;
@@ -40,7 +40,8 @@ const gen_header = (config, bundle_kumiyui) => {
     ) {
       config.require = [FRAMEWORK_CDN];
     } else {
-      config.require.push(FRAMEWORK_CDN);
+      if (!config.require.includes(FRAMEWORK_CDN))
+        config.require.push(FRAMEWORK_CDN);
     }
   }
 
@@ -95,14 +96,26 @@ const gen_header = (config, bundle_kumiyui) => {
 const buildScript = async ({ bundle_kumiyui, external_package, minify, ignore_use_strict, config, entry_file, outp_path }) => {
   console.log("build project based on kumiyui");
 
+  // make the __require() function by Bun.build() load the banner
+  /* original code
+  const require = (module_name) => {
+    if (module_name === "kumiyui") return window.Kumiyui;
+    throw new Error("Dynamic require of " + moduleName + " is not supported.");
+  };
+  */
+  const kumiyui_require_banner = `const require=r=>{if("kumiyui"===r)return window.Kumiyui;throw new Error("Dynamic require of "+moduleName+" is not supported.")};`;
+
   // using bun's build api
   const result = await Bun.build({
     entrypoints: [entry_file],
     target: "browser",
     minify: minify,
     external: !bundle_kumiyui ? ["kumiyui"] : [],
-    packages: external_package ? "external" : undefined, // leaves undefined so it makes Bun.build uses the default value
-    format: !bundle_kumiyui ? "iife" : undefined, // leaves undefined so it makes Bun.build uses the default value
+
+    // leaves undefined so it makes Bun.build uses the default value
+    packages: external_package ? "external" : undefined,
+    format: !bundle_kumiyui ? "iife" : undefined,
+    banner: (!bundle_kumiyui && !minify) ? kumiyui_require_banner : undefined
   })
 
   if (!result.success) {
@@ -113,7 +126,8 @@ const buildScript = async ({ bundle_kumiyui, external_package, minify, ignore_us
   // bundle header + code
   const bundled_code = await result.outputs[0].text();
   const use_strict_text = !ignore_use_strict ? `"use strict";\n` : "";
-  const bundled_outp = gen_header(config, bundle_kumiyui) + use_strict_text + bundled_code;
+  const require_banner_build = minify ? kumiyui_require_banner : "";
+  const bundled_outp = gen_header(config, bundle_kumiyui) + use_strict_text + require_banner_build + bundled_code;
 
   // create dist if doesn't exist
   // avoid toctou stuff by doing this
