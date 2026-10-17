@@ -3,10 +3,11 @@ import Bun from "bun";
 import fs from "node:fs";
 import path from "node:path";
 
-const gen_header = (config) => {
+const MAX_PADDING_LEN = 50;
+const FRAMEWORK_CDN = "https://cdn.jsdelivr.net/gh/kumiyuki/kumiyui@HEAD/kumiyui.bundle.js";
+const gen_header = (config, bundle_kumiyui) => {
   let header = "// ==UserScript==\n";
   let padding_len = 20;
-  const advanced_metadata_keys = ["match", "include", "exclude", "exclude-match", "grant", "connect", "tag", "require", "resource"];
 
   // hardcoded headers
   // it's required because user might break the framework if missing these changes
@@ -31,52 +32,59 @@ const gen_header = (config) => {
       config.grant.push(perm);
   })
 
+  // for kumiyui framework import
+  if (!bundle_kumiyui) {
+    if (
+      typeof config?.require !== "object" ||
+      !Array.isArray(config?.require)
+    ) {
+      config.require = [FRAMEWORK_CDN];
+    } else {
+      config.require.push(FRAMEWORK_CDN);
+    }
+  }
+
   // must run at document-start for hooking at higher privilege
   config["run-at"] = "document-start";
 
-  // render basic header
+  // get metadata keys and calculate padding length
   const metadata_keys = Object.keys(config);
-  for (const metad_key of metadata_keys) {
-    // make sure the metadata is not advanced
-    if (advanced_metadata_keys.includes(metad_key))
-      continue;
+  const keys_maxlen = Math.max(...metadata_keys.map(str => str.length));
 
+  // only update the padding length if it's longer than the current padding length
+  if (keys_maxlen >= padding_len) {
+    padding_len = Math.max(
+      Math.min(keys_maxlen + 4, MAX_PADDING_LEN),
+      20 // default padding length
+    );
+  }
+
+  // render header
+  for (const metad_key of metadata_keys) {
     // check if data is valid
     const data = config[metad_key];
     if (typeof data === "undefined")
       continue;
 
-    // render it
-    header += `// @${metad_key}`.padEnd(padding_len, " ") + `${data}\n`;
-  }
+    // this header is advanced? they can add multiple times?
+    if (Array.isArray(data)) {
+      data.forEach((content) => {
+        // a bit of overhead to avoid removing all permissions.
+        // avoid remove all "grants" (permissions) by using "none"
+        // sorry, but this is required, or else some functions in the framework might break and malfunction
+        // if you plan to edit them, make sure to know what you are doing
+        if (
+          metad_key === "grant" &&
+          content?.toString().toLowerCase().replaceAll(" ", "") === "none"
+        ) return;
 
-  // for headers that can be defined multiple times
-  for (const advanced_metad_key of advanced_metadata_keys) {
-    // check if data is valid
-    const data = config[advanced_metad_key];
-
-    // only continue if metadata key exists
-    if (typeof data !== "object")
-      continue;
-
-    // make sure it's an array
-    if (!Array.isArray(data))
-      continue;
-
-    // render metadata for the header
-    data.forEach((content) => {
-      // a bit of overhead to avoid removing all permissions.
-      // avoid remove all "grants" (permissions) by using "none"
-      // sorry, but this is required, or else some functions in the framework might break and malfunction
-      // if you plan to edit them, make sure to know what you are doing
-      if (
-        advanced_metad_key === "grant" &&
-        content?.toString().toLowerCase().replaceAll(" ", "") === "none"
-      ) return;
-
-      // adding header
-      header += `// @${advanced_metad_key}`.padEnd(padding_len, " ") + `${content}\n`
-    })
+        // adding header
+        header += `// @${metad_key}`.padEnd(padding_len, " ") + `${content}\n`
+      })
+    } else {
+      // render basic header
+      header += `// @${metad_key}`.padEnd(padding_len, " ") + `${data}\n`;
+    }
   }
 
   // return header
@@ -84,14 +92,16 @@ const gen_header = (config) => {
   return header;
 }
 
-const buildScript = async ({ minify, ignore_use_strict, config, entry_file, outp_file }) => {
+const buildScript = async ({ bundle_kumiyui, external_package, minify, ignore_use_strict, config, entry_file, outp_path }) => {
   console.log("build project based on kumiyui");
 
   // using bun's build api
   const result = await Bun.build({
     entrypoints: [entry_file],
     target: "browser",
-    minify: minify
+    minify: minify,
+    external: !bundle_kumiyui ? ["kumiyui"] : [],
+    packages: external_package ? "external" : undefined, // leaves undefined so it makes Bun.build uses the default value
   })
 
   if (!result.success) {
@@ -102,16 +112,16 @@ const buildScript = async ({ minify, ignore_use_strict, config, entry_file, outp
   // bundle header + code
   const bundled_code = await result.outputs[0].text();
   const use_strict_text = !ignore_use_strict ? `"use strict";\n` : "";
-  const bundled_outp = gen_header(config) + use_strict_text + bundled_code;
+  const bundled_outp = gen_header(config, bundle_kumiyui) + use_strict_text + bundled_code;
 
   // create dist if doesn't exist
   // avoid toctou stuff by doing this
   try {
-    fs.mkdirSync(path.dirname(outp_file))
+    fs.mkdirSync(path.dirname(outp_path))
   } catch {}
 
   // write output into file
-  fs.writeFileSync(outp_file, bundled_outp);
+  fs.writeFileSync(outp_path, bundled_outp);
 
   // build finished
   console.log("build finished!")
@@ -120,10 +130,33 @@ const buildScript = async ({ minify, ignore_use_strict, config, entry_file, outp
 const main = async () => {
   const args = process.argv.slice(2);
 
-  // a flag for minify build
-  const minify = process.argv.includes("--minify");
+  // flags for building
+  const help = process.argv.includes("-h") || process.argv.includes("--help");
+  const minify = process.argv.includes("-m") || process.argv.includes("--minify");
+  const build_both = process.argv.includes("-b") || process.argv.includes("--both");
   const ignore_use_strict = process.argv.includes("--ignore-use-strict");
+  const bundle_kumiyui = process.argv.includes("--bundle-kumiyui");
+  const external_package = process.argv.includes("--packages=external")
 
+  // for help flag
+  if (help) {
+    console.log(`usage: kumiyui build [options]
+    
+    Options:
+      -h, --help                Show this help message and exit
+      -m, --minify              Build with code minification
+      -b, --both                Output both minified and unminified userscripts
+          --ignore-use-strict   Remove "use strict" directives from the build 
+          --packages=external   Do not bundle npm dependencies (leaves import external)
+          --bundle-kumiyui      Bundle the Kumiyui framework code into the userscript.
+                                [warn]: static bundling might trigger GPLv3 copyleft.
+                                I don't recommend bundling the framework unless your
+                                project uses GPLv3 or a compatible license.
+    `)
+    return;
+  }
+
+  // only build command
   if (args[0] !== "build")
     return console.log("unknown command, try: kumiyui build");
 
@@ -137,20 +170,59 @@ const main = async () => {
   const pkg = JSON.parse(fs.readFileSync(pkg_path, "utf-8"));
   const config = pkg.kumiyui || {};
   const entry_file = config.entry || "./index.js";
-  const outp_file = config.output || "./dist/kumiyui.user.js";
+  const outp_path = config.output || "./dist/kumiyui.user.js";
+  const minified_output_path = config.minified_output_path || outp_path;
 
   if (!fs.existsSync( path.join(project_root, entry_file) ))
     return console.error(`entry file not found, file name: ${entry_file}`);
 
+  // bundle-kumiyui flag warns (i feel like adding 2 warnings)
+  console.warn("[warning]:")
+  console.warn(`
+  static bundling might trigger GPLv3 copyleft.
+  I don't recommend bundling the framework unless your
+  project uses GPLv3 or a compatible license.
+  `);
+
   // building
-  console.log(`building ${entry_file}...`);
-  await buildScript({
-    minify,
-    ignore_use_strict,
-    config: config?.headers || {},
-    entry_file,
-    outp_file
-  });
+  if (build_both === true) {
+    console.log(`building ${entry_file} (both minified and non-minified)...`);
+    
+    // minified build first
+    await buildScript({
+      bundle_kumiyui,
+      external_package,
+      minify: true,
+      ignore_use_strict,
+      config: config?.headers || {},
+      entry_file,
+      outp_path: minified_output_path
+    });
+
+    // non-minified build
+    await buildScript({
+      bundle_kumiyui,
+      external_package,
+      minify: false,
+      ignore_use_strict,
+      config: config?.headers || {},
+      entry_file,
+      outp_path
+    });
+  } else {
+    console.log(`building ${entry_file} (${minify ? "minified" : "normal"})...`);
+    await buildScript({
+      bundle_kumiyui,
+      external_package,
+      minify,
+      ignore_use_strict,
+      config: config?.headers || {},
+      entry_file,
+      outp_path: minify
+        ? minified_output_path
+        : outp_path
+    });
+  }
 }
 
 main();

@@ -32,7 +32,7 @@ export class DropInConsole {
     
     const title = document.createElement('span');
     title.style.cssText = 'color:#aaa;font-weight:bold;';
-    title.textContent = '🛠️ Framework Terminal';
+    title.textContent = '🛠️ Terminal';
     
     const closeBtn = document.createElement('button');
     closeBtn.style.cssText = 'background:none;border:none;color:#f55;cursor:pointer;font-weight:bold;font-size:14px;padding:4px;';
