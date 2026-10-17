@@ -126,12 +126,13 @@ export class DropInConsole {
     }
   }
 
+  trace(...args) { this.printLevel('debug', ...args); }
+  debug(...args) { this.printLevel('debug', ...args); }
   log(...args) { this.printLevel('log', ...args); }
   info(...args) { this.printLevel('log', ...args); }
+  table(data) { this.printLevel('log', data); }
   warn(...args) { this.printLevel('warn', ...args); }
   error(...args) { this.printLevel('error', ...args); }
-  debug(...args) { this.printLevel('debug', ...args); } // Added .debug level
-  table(data) { this.printLevel('log', data); }
 
   printLevel(level, ...args) {
     const len = args.length;
