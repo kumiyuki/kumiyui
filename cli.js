@@ -3,8 +3,17 @@ import Bun from "bun";
 import fs from "node:fs";
 import path from "node:path";
 
+let framework_pkg = null;
+try {
+  const pkg_path = path.join(import.meta.dirname, "package.json")
+  framework_pkg = JSON.parse(fs.readFileSync(pkg_path, "utf-8"));
+} catch (e) {
+  console.error("failed to parse kumiyui's package, error:", e);
+}
+
+const VERSION = framework_pkg?.version;
 const MAX_PADDING_LEN = 50;
-const FRAMEWORK_CDN = "https://cdn.jsdelivr.net/gh/kumiyuki/kumiyui@HEAD/cdn_build/dist/kumiyui.min.js";
+const FRAMEWORK_CDN = `https://cdn.jsdelivr.net/gh/kumiyuki/kumiyui@${VERSION ? ("v" + VERSION) : "HEAD"}/cdn_build/dist/kumiyui.min.js`;
 const gen_header = (config, bundle_kumiyui) => {
   let header = "// ==UserScript==\n";
   let padding_len = 20;
@@ -192,12 +201,14 @@ const main = async () => {
     return console.error(`entry file not found, file name: ${entry_file}`);
 
   // bundle-kumiyui flag warns (i feel like adding 2 warnings)
-  console.warn("[warning]:")
-  console.warn(`
-  static bundling might trigger GPLv3 copyleft.
-  I don't recommend bundling the framework unless your
-  project uses GPLv3 or a compatible license.
-  `);
+  if (bundle_kumiyui) {
+    console.warn("[warning]:")
+    console.warn(`
+    static bundling might trigger GPLv3 copyleft.
+    I don't recommend bundling the framework unless your
+    project uses GPLv3 or a compatible license.
+    `);
+  }
 
   // building
   if (build_both === true) {
