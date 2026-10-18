@@ -4,8 +4,8 @@ a small framework for web application injection.
 ## documentation
 | language | core documentation | user manual |
 | :--- | :--- | :--- |
-| **English** | [Developer Reference](../dev/README.md) | [User Manual](./README.md) |
-| **Tiếng Việt** | none | [Hướng dẫn sử dụng](./README.vn.md) |
+| **English** | [Developer Reference](./docs/dev/README.md) | [User Manual](./docs/user/README.md) |
+| **Tiếng Việt** | none | [Hướng dẫn sử dụng](./docs/user/README.vn.md) |
 
 > [!note]
 > the entire documentation is written by an LLM.\
