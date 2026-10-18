@@ -33,6 +33,17 @@ export class DropInConsole {
     const title = document.createElement('span');
     title.style.cssText = 'color:#aaa;font-weight:bold;';
     title.textContent = '🛠️ Terminal';
+
+    const end_group = document.createElement("div");
+    end_group.style.cssText = "display:flex;gap:8px;align-items:center;"
+
+    const clearBtn = document.createElement('button');
+    clearBtn.style.cssText = 'background:none;border:none;color:#ff9999;cursor:pointer;font-weight:bold;font-size:14px;padding:4px;';
+    clearBtn.textContent = '⌀ Clear';
+    clearBtn.addEventListener('click', () => {
+      if (typeof this?.output?.replaceChildren === "function")
+        this.output.replaceChildren();
+    });
     
     const closeBtn = document.createElement('button');
     closeBtn.style.cssText = 'background:none;border:none;color:#f55;cursor:pointer;font-weight:bold;font-size:14px;padding:4px;';
@@ -40,7 +51,9 @@ export class DropInConsole {
     closeBtn.addEventListener('click', () => this.toggle());
 
     header.appendChild(title);
-    header.appendChild(closeBtn);
+    end_group.appendChild(clearBtn);
+    end_group.appendChild(closeBtn);
+    header.appendChild(end_group);
     
     this.output = document.createElement('div');
     this.output.style.cssText = 'flex:1;overflow-y:auto;padding:0;white-space:pre;line-height:1.4;';

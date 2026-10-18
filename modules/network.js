@@ -695,6 +695,7 @@ const _init_network_hook = () => {
             for (const hook of hook_registry?.after) {
               try {
                 const clone = simulated_res.clone();
+                let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
                 let mod = null;
                 try {
                   mod = await hook(context, clone);
