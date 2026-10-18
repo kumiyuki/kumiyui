@@ -1,6 +1,16 @@
 # kumiyui
 a small framework for web application injection.
 
+## documentation
+| language | core documentation | user manual |
+| :--- | :--- | :--- |
+| **English** | [Developer Reference](../dev/README.md) | [User Manual](./README.md) |
+| **Tiếng Việt** | none | [Hướng dẫn sử dụng](./README.vn.md) |
+
+> [!note]
+> the entire documentation is written by an LLM.\
+> i'm not good at writing documentation or expressing myself in a way that people fully understand, so LLM is more suitable for the job.
+
 # installation
 ```sh
 bun add github:kumiyuki/kumiyui#vx.y.z
@@ -11,4 +21,4 @@ bun add github:kumiyuki/kumiyui#vx.y.z
 you can fork the template here: https://github.com/kumiyuki/kumiyui_template
 
 # development
-you can trigger the workflow build by changing the version in [./package.json](./package.json) file and push it to the repository.
+you can trigger the workflow build and release a new version by changing the version in [./package.json](./package.json) file and push it to the repository.
