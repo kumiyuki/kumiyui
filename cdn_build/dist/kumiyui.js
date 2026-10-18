@@ -855,7 +855,7 @@
               let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
               if (typeof modification !== "undefined") {
                 if (modification === false) {
-                  state._kumiyui_response = null;
+                  state._kumiyui_response.body = null;
                   state._kumiyui_blocked = true;
                   hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
                   break;
@@ -867,10 +867,10 @@
                     else if (_res_key === "send_to_server")
                       _response["send_to_server"] = false;
                   });
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 } else if (typeof modification === "string") {
                   _response["body"] = modification;
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 }
                 break;
               }
@@ -1021,7 +1021,7 @@
               let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
               if (typeof modification !== "undefined") {
                 if (modification === false) {
-                  state._kumiyui_response = null;
+                  state._kumiyui_response.body = null;
                   state._kumiyui_blocked = true;
                   break;
                 }
@@ -1032,10 +1032,10 @@
                     else if (_res_key === "send_to_server")
                       _response["send_to_server"] = false;
                   });
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 } else if (typeof modification === "string") {
                   _response["body"] = modification;
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 }
                 break;
               }
@@ -1079,10 +1079,10 @@
                       else if (_res_key === "send_to_server")
                         _response["send_to_server"] = false;
                     });
-                    state._kumiyui_response = _response;
+                    state._kumiyui_response.body = _response;
                   } else if (typeof mod === "string") {
                     _response["body"] = mod;
-                    state._kumiyui_response = _response;
+                    state._kumiyui_response.body = _response;
                   }
                   state._kumiyui_finished = true;
                 } catch (e) {
