@@ -122,7 +122,7 @@ const _init_network_hook = () => {
             logger.error(`cannot execute hook listener on window.fetch() hook (type: "before"), error:`, e);
           }
 
-          if (typeof modification !== "undefined") { 
+          if (modification !== undefined) { 
             // return false to drop the network request (feature)
             //
             // note: it only drops connection, the client might wait forever for a response.
@@ -143,7 +143,7 @@ const _init_network_hook = () => {
             if (modification && typeof modification === "object") {
               // update to the tampered data
               ["status", "statusText", "headers"].forEach((_res_key) => {
-                if (typeof modification[_res_key] !== "undefined")
+                if (modification[_res_key] !== undefined)
                   _response[_res_key] = modification[_res_key];
               });
 
@@ -208,7 +208,7 @@ const _init_network_hook = () => {
             logger.error(`cannot execute hook listener on window.fetch() hook (type: "after"), error:`, e);
           }
 
-          if (typeof modification !== "undefined") {
+          if (modification !== undefined) {
             if (modification instanceof Response) {
               response = modification;
             } else {
@@ -217,11 +217,11 @@ const _init_network_hook = () => {
               if (
                 modification &&
                 typeof modification === "object" &&
-                (typeof modification["body"] !== "undefined" || typeof modification["status"] !== "undefined")
+                (modification["body"] !== undefined ||  modification["status"] !== undefined)
               ) {
                 // update to the tampered data
                 ["status", "statusText", "headers"].forEach((_res_key) => {
-                  if (typeof modification[_res_key] !== "undefined")
+                  if (modification[_res_key] !== undefined)
                     _response[_res_key] = modification[_res_key];
                 });
               }
@@ -341,6 +341,9 @@ const _init_network_hook = () => {
           // - send_to_server allows to modify data and client can get the modified data
           // - blocking doesn't allow the client to get any data, and makes the client wait forever with no sign of returning data
           _kumiyui_blocked: false,
+
+          // for event listeners
+          _kumiyui_event_listeners: new WeakMap(),
           
           // for "after" hook event listener to resolve data
           _kumiyui_change_listeners: [],
@@ -374,7 +377,7 @@ const _init_network_hook = () => {
           try {
             const modification = await hook(state._kumiyui_context);
             let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
-            if (typeof modification !== "undefined") {
+            if (modification !== undefined) {
               // return false to drop the network request (feature)
               //
               // note: it only drops connection, the client might wait forever for a response.
@@ -384,7 +387,7 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                state._kumiyui_response.body = null;;
+                state._kumiyui_response.body = null;
                 state._kumiyui_blocked = true;
 
                 // empty the send function
@@ -539,7 +542,7 @@ const _init_network_hook = () => {
 
       // avoid client gets data before modified by "after" hooks
       set onreadystatechange(on_state_change_fn) {
-        super.onreadystatechange(async (..._o_args) => {
+        super.onreadystatechange = async (..._o_args) => {
           // get private storage
           const state = xhr_hook_map.get(this);
 
@@ -549,16 +552,16 @@ const _init_network_hook = () => {
           // so the "after" hook finished, call the requested listener
           if (typeof on_state_change_fn === "function") {
             try {
-              on_state_change_fn(..._o_args);
+              on_state_change_fn.apply(this, _o_args);
             } catch (e) {
               logger.error("cannot execute function onreadystatechange() on xhr hook, error:", e)
             }
           }
-        });
+        };
       }
 
       set onload(onload_fn) {
-        super.onload(async (..._o_args) => {
+        super.onload = async (..._o_args) => {
           // get private storage
           const state = xhr_hook_map.get(this);
 
@@ -567,22 +570,25 @@ const _init_network_hook = () => {
 
           // so the "after" hook finished, call the requested listener
           if (typeof onload_fn === "function") {
-            onload_fn(..._o_args);
             try {
-              return super.send(context.args[1]);
+              onload_fn.apply(this, _o_args);
             } catch (e) {
               logger.error("cannot execute function onload() on xhr hook, error:", e)
             }
           }
-        });
+        };
       }
 
       addEventListener(...args) {
+        // need to make the passed arguments constant
+        const event_type = args[0];
+        const listener = args[1];
+
         // only hook for state watcher event only
-        if (args[0] !== "readystatechange" && args[0] !== "load")
+        if (event_type !== "readystatechange" && event_type !== "load")
           return super.addEventListener(...args);
         
-        super.addEventListener(args[0], async (..._o_args) => {
+        const hook_wrapped_listener = async (..._o_args) => {
           // get private storage
           const state = xhr_hook_map.get(this);
 
@@ -590,14 +596,37 @@ const _init_network_hook = () => {
           await await_after_hook(state);
 
           // so the "after" hook finished, call the requested listener
-          if (typeof args[1] === "function") {
+          if (typeof listener === "function") {
             try {
-              args[1](..._o_args);
+              listener.apply(this, _o_args);
             } catch (e) {
               logger.error("cannot execute function given on the second argument of addEventListener() at xhr hook, error:", e)
             }
           }
-        })
+        }
+
+        // store a reference to the wrapper so removeEventListener can find it if needed
+        const state = xhr_hook_map.get(this);
+        if (!state._kumiyui_event_listeners)
+          state._kumiyui_event_listeners = new WeakMap();
+        
+        state._kumiyui_event_listeners.set(listener, hook_wrapped_listener);
+
+        // execute the listener
+        return super.addEventListener(event_type, hook_wrapped_listener, ...args.splice(2));
+      }
+
+      removeEventListener(...args) {
+        const state = xhr_hook_map.get(this);
+        const event_type =  args[0];
+        const listener = args[1];
+
+        if (state._kumiyui_event_listeners && state._kumiyui_event_listeners.has(listener)) {
+          const wrapped = state._kumiyui_event_listeners.get(listener);
+          return super.removeEventListener(event_type, listener, ...args.splice(2));
+        }
+
+        return super.removeEventListener(event_type, listener, ...args.splice(2));
       }
 
       // send function (uses for tracking "after" hooks and body for "before" hooks)
@@ -628,7 +657,7 @@ const _init_network_hook = () => {
           try {
             const modification = await hook(context);
             let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
-            if (typeof modification !== "undefined") {
+            if (modification !== undefined) {
               // return false to drop the network request (feature)
               //
               // note: it only drops connection, the client might wait forever for a response.
@@ -638,7 +667,7 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                state._kumiyui_response.body = null;;
+                state._kumiyui_response.body = null;
                 state._kumiyui_blocked = true;
                 break;
               }
@@ -683,50 +712,52 @@ const _init_network_hook = () => {
           }
 
           // only run on readyState
-          if (this.readyState === 4) {
-            let simulated_res = new Response(super.response, {
-              status: super.status,
-              statusText: super.statusText,
-              headers: new Headers((this.getAllResponseHeaders() || "").split("\r\n").reduce((acc, line) => {
-                const [k, v] = line.split(": "); if (k) acc[k] = v; return acc;
-              }, {}))
-            })
+          if (this.readyState !== 4)
+            return;
 
-            for (const hook of hook_registry?.after) {
+          let simulated_res = new Response(super.response, {
+            status: super.status,
+            statusText: super.statusText,
+            headers: new Headers((this.getAllResponseHeaders() || "").split("\r\n").reduce((acc, line) => {
+              const [k, v] = line.split(": "); if (k) acc[k] = v; return acc;
+            }, {}))
+          })
+
+          for (const hook of hook_registry?.after) {
+            try {
+              const clone = simulated_res.clone();
+              let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
+              let mod = null;
               try {
-                const clone = simulated_res.clone();
-                let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
-                let mod = null;
-                try {
-                  mod = await hook(context, clone);
-                } catch (e) {
-                  logger.error(`cannot execute hook listener on XHR hook (type: "before"), error:`, e);
-                }
-
-                if (typeof mod === "object") {
-                  // update to the tampered data
-                  ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
-                    if (mod[_res_key] !== undefined)
-                      _response[_res_key] = mod[_res_key];
-                    else
-                      // send to server defaults to false if not set
-                      if (_res_key === "send_to_server")
-                        _response["send_to_server"] = false;
-                  });
-
-                  // body can be null, so restrict to only undefined
-                  state._kumiyui_response.body = _response;
-                } else if (typeof mod === "string") {
-                  _response["body"] = mod;
-                  state._kumiyui_response.body = _response;
-                }
-
-                state._kumiyui_finished = true;
+                mod = await hook(context, clone);
               } catch (e) {
-                logger.error(`error on XHR hook (type: "after"), error:`, e);
+                logger.error(`cannot execute hook listener on XHR hook (type: "after"), error:`, e);
               }
+
+              if (typeof mod === "object" && mod !== null) {
+                // update to the tampered data
+                ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+                  if (mod[_res_key] !== undefined)
+                    _response[_res_key] = mod[_res_key];
+                  else
+                    // send to server defaults to false if not set
+                    if (_res_key === "send_to_server")
+                      _response["send_to_server"] = false;
+                });
+
+                // body can be null, so restrict to only undefined
+                state._kumiyui_response.body = _response;
+              } else if (typeof mod === "string") {
+                _response["body"] = mod;
+                state._kumiyui_response.body = _response;
+              }
+            } catch (e) {
+              logger.error(`error on XHR hook (type: "after"), error:`, e);
             }
           }
+
+          // guarantee state is marked finished after all hooks run
+          state._kumiyui_finished = true;
         })
 
         if (!state._kumiyui_is_opened || super.readyState < 1) {
