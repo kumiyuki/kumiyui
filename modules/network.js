@@ -384,7 +384,7 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                state._kumiyui_response = null;
+                state._kumiyui_response.body = null;;
                 state._kumiyui_blocked = true;
 
                 // empty the send function
@@ -404,10 +404,10 @@ const _init_network_hook = () => {
                 });
 
                 // body can be null, so restrict to only undefined
-                state._kumiyui_response = _response;
+                state._kumiyui_response.body = _response;
               } else if (typeof modification === "string") {
                 _response["body"] = modification;
-                state._kumiyui_response = _response;
+                state._kumiyui_response.body = _response;
               }
 
               // only execute the first hook
@@ -638,7 +638,7 @@ const _init_network_hook = () => {
               // elements, ... By making it wait forever, the client will/might not delete
               // the element or any interactive functions.
               if (modification === false) {
-                state._kumiyui_response = null;
+                state._kumiyui_response.body = null;;
                 state._kumiyui_blocked = true;
                 break;
               }
@@ -655,10 +655,10 @@ const _init_network_hook = () => {
                 });
 
                 // body can be null, so restrict to only undefined
-                state._kumiyui_response = _response;
+                state._kumiyui_response.body = _response;
               } else if (typeof modification === "string") {
                 _response["body"] = modification;
-                state._kumiyui_response = _response;
+                state._kumiyui_response.body = _response;
               }
 
               // only execute the first hook
@@ -715,10 +715,10 @@ const _init_network_hook = () => {
                   });
 
                   // body can be null, so restrict to only undefined
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 } else if (typeof mod === "string") {
                   _response["body"] = mod;
-                  state._kumiyui_response = _response;
+                  state._kumiyui_response.body = _response;
                 }
 
                 state._kumiyui_finished = true;
