@@ -10,6 +10,15 @@ Cẩm nang này cung cấp các hướng dẫn chi tiết để tương tác v�
 
 ---
 
+## Ngôn ngữ
+
+| Ngôn ngữ | Tài liệu kỹ thuật (Dev) | Hướng dẫn sử dụng |
+| :--- | :--- | :--- |
+| **English** | [Developer Reference](../dev/README.md) | [User Manual](./README.md) |
+| **Tiếng Việt** | Không có | [Hướng dẫn sử dụng](./README.vn.md) |
+
+---
+
 ## Kích hoạt hộp nhập lệnh (Command Prompt)
 
 Giao diện điều khiển chính của Kumiyui là một hộp thoại nhập liệu dạng văn bản xuất hiện đè lên trang web hiện tại.
