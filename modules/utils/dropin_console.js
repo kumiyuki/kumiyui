@@ -3,9 +3,10 @@
 // i have minified some parts in the class
 const document = window.document;
 
-// i will keep the code below as original as possible, and what the LLM writes
-// but i have updated it a bit and added methods to avoid other event listeners
-// from interupting the input
+// i will keep the code below as original as possible
+// but it seems like i have updated it a bit:
+// - added methods to avoid other event listeners from interupting the input
+// - i also modified it a few elements...
 /*
  * Highly-Optimized Mobile Command Terminal Component (With .debug and .table)
  * Contributed by Gemini (Google AI) via prompt assistance.
@@ -63,7 +64,7 @@ export class DropInConsole {
     
     this.inputField = document.createElement('input');
     this.inputField.type = 'text';
-    this.inputField.placeholder = 'Type framework command...';
+    this.inputField.placeholder = 'input command...';
     this.inputField.style.cssText = 'flex:1;background:#252525;border:1px solid #444;color:#0f0;font-family:monospace;font-size:14px;padding:8px 10px;border-radius:4px;outline:none;';
     this.inputField.addEventListener('keydown', (e) => {
       // avoid page from capturing request
