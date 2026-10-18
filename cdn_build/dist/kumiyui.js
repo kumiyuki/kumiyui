@@ -102,7 +102,7 @@
       inputContainer.style.cssText = "background:#1a1a1a;padding:8px;border-top:1px solid #333;display:flex;align-items:center;";
       this.inputField = document2.createElement("input");
       this.inputField.type = "text";
-      this.inputField.placeholder = "Type framework command...";
+      this.inputField.placeholder = "input command...";
       this.inputField.style.cssText = "flex:1;background:#252525;border:1px solid #444;color:#0f0;font-family:monospace;font-size:14px;padding:8px 10px;border-radius:4px;outline:none;";
       this.inputField.addEventListener("keydown", (e) => {
         e.stopPropagation();
