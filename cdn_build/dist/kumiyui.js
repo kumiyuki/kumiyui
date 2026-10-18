@@ -79,12 +79,23 @@
       const title = document2.createElement("span");
       title.style.cssText = "color:#aaa;font-weight:bold;";
       title.textContent = "\uD83D\uDEE0️ Terminal";
+      const end_group = document2.createElement("div");
+      end_group.style.cssText = "display:flex;gap:8px;align-items:center;";
+      const clearBtn = document2.createElement("button");
+      clearBtn.style.cssText = "background:none;border:none;color:#ff9999;cursor:pointer;font-weight:bold;font-size:14px;padding:4px;";
+      clearBtn.textContent = "⌀ Clear";
+      clearBtn.addEventListener("click", () => {
+        if (typeof this?.output?.replaceChildren === "function")
+          this.output.replaceChildren();
+      });
       const closeBtn = document2.createElement("button");
       closeBtn.style.cssText = "background:none;border:none;color:#f55;cursor:pointer;font-weight:bold;font-size:14px;padding:4px;";
       closeBtn.textContent = "✕ Close";
       closeBtn.addEventListener("click", () => this.toggle());
       header.appendChild(title);
-      header.appendChild(closeBtn);
+      end_group.appendChild(clearBtn);
+      end_group.appendChild(closeBtn);
+      header.appendChild(end_group);
       this.output = document2.createElement("div");
       this.output.style.cssText = "flex:1;overflow-y:auto;padding:0;white-space:pre;line-height:1.4;";
       const inputContainer = document2.createElement("div");
@@ -673,18 +684,18 @@
                 is_execution_blocked = true;
                 break;
               }
-              let _response2 = { status: 200, statusText: "OK", headers: new Headers };
+              let _response = { status: 200, statusText: "OK", headers: new Headers };
               let response_body = null;
               if (modification && typeof modification === "object") {
                 ["status", "statusText", "headers"].forEach((_res_key) => {
                   if (typeof modification[_res_key] !== "undefined")
-                    _response2[_res_key] = modification[_res_key];
+                    _response[_res_key] = modification[_res_key];
                 });
                 response_body = modification?.body !== undefined ? modification.body : null;
               } else if (typeof modification === "string") {
                 response_body = modification;
               }
-              short_circuit_response = new Response(response_body, _response2);
+              short_circuit_response = new Response(response_body, _response);
               break;
             }
           } catch (e) {
@@ -721,14 +732,14 @@
               if (modification instanceof Response) {
                 response = modification;
               } else {
-                let _response2 = { status: 200, statusText: "OK", headers: new Headers };
+                let _response = { status: 200, statusText: "OK", headers: new Headers };
                 if (modification && typeof modification === "object" && (typeof modification["body"] !== "undefined" || typeof modification["status"] !== "undefined")) {
                   ["status", "statusText", "headers"].forEach((_res_key) => {
                     if (typeof modification[_res_key] !== "undefined")
-                      _response2[_res_key] = modification[_res_key];
+                      _response[_res_key] = modification[_res_key];
                   });
                 }
-                response = new Response(modification?.body, _response2);
+                response = new Response(modification?.body, _response);
               }
             }
           } catch (e) {
@@ -841,7 +852,7 @@
           for (const hook2 of hook_registry?.before) {
             try {
               const modification = await hook2(state._kumiyui_context);
-              let _response2 = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
+              let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
               if (typeof modification !== "undefined") {
                 if (modification === false) {
                   state._kumiyui_response = null;
@@ -852,14 +863,14 @@
                 if (typeof modification === "object") {
                   ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
                     if (modification[_res_key] !== undefined)
-                      _response2[_res_key] = modification[_res_key];
+                      _response[_res_key] = modification[_res_key];
                     else if (_res_key === "send_to_server")
-                      _response2["send_to_server"] = false;
+                      _response["send_to_server"] = false;
                   });
-                  state._kumiyui_response = _response2;
+                  state._kumiyui_response = _response;
                 } else if (typeof modification === "string") {
-                  _response2["body"] = modification;
-                  state._kumiyui_response = _response2;
+                  _response["body"] = modification;
+                  state._kumiyui_response = _response;
                 }
                 break;
               }
@@ -1007,7 +1018,7 @@
           for (const hook of hook_registry?.before) {
             try {
               const modification = await hook(context2);
-              let _response2 = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
+              let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
               if (typeof modification !== "undefined") {
                 if (modification === false) {
                   state._kumiyui_response = null;
@@ -1017,14 +1028,14 @@
                 if (modification && typeof modification === "object") {
                   ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
                     if (modification[_res_key] !== undefined)
-                      _response2[_res_key] = modification[_res_key];
+                      _response[_res_key] = modification[_res_key];
                     else if (_res_key === "send_to_server")
-                      _response2["send_to_server"] = false;
+                      _response["send_to_server"] = false;
                   });
-                  state._kumiyui_response = _response2;
+                  state._kumiyui_response = _response;
                 } else if (typeof modification === "string") {
-                  _response2["body"] = modification;
-                  state._kumiyui_response = _response2;
+                  _response["body"] = modification;
+                  state._kumiyui_response = _response;
                 }
                 break;
               }
@@ -1054,6 +1065,7 @@
               for (const hook of hook_registry?.after) {
                 try {
                   const clone = simulated_res.clone();
+                  let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
                   let mod = null;
                   try {
                     mod = await hook(context2, clone);
