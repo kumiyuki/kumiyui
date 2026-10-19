@@ -30,27 +30,27 @@ export const is_json = (str) => {
 }
 
 // this function is created to avoid the client from getting response before the "after" hook finished assigning value
-const await_after_hook = async (env) => {
+const await_after_hook = async (env, state) => {
   // prevent from continue to the watcher to avoid wasting resources
   if (
-    (env?.readyState === 4 && env?._kumiyui_finished === true) ||
-    env?._kumiyui_blocked === true
+    (env?.readyState === 4 && state?._kumiyui_finished === true) ||
+    state?._kumiyui_blocked === true
   )
     return;
   
   // if already at ready state but "after" hook still haven't finished yet
-  if (env?.readyState === 4 && !env._kumiyui_finished) {
+  if (env?.readyState === 4 && !state._kumiyui_finished) {
     await new Promise((resolve) => {
       // push it into listener queue first
-      env?._kumiyui_change_listeners.push(resolve);
+      state?._kumiyui_change_listeners.push(resolve);
 
       // if it finishes right after pushing or at the moment right before await new Promise(...) and between if check
-      // if it's blocked, return normally
-      if (env._kumiyui_finished === true || env._kumiyui_blocked === true) {
+      // if it's blocked, allow to resolve too, or else the request will stuck
+      if (state._kumiyui_finished === true || state._kumiyui_blocked === true) {
         // clean up the listener
-        const listener_index = env._kumiyui_change_listeners.indexOf(resolve);
+        const listener_index = state._kumiyui_change_listeners.indexOf(resolve);
         if (listener_index !== -1)
-          env._kumiyui_change_listeners.splice(listener_index, 1);
+          state._kumiyui_change_listeners.splice(listener_index, 1);
 
         // resolve it
         return resolve();
@@ -303,6 +303,58 @@ const _init_network_hook = () => {
   // use weakmap for storing data and avoid private variables being exposed to website client side
   const xhr_hook_map = new WeakMap();
 
+  // "before" loop function
+  const xhr_before = async (state) => {
+    for (const hook of hook_registry?.before) {
+      try {
+        const modification = await hook(state._kumiyui_context);
+        let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
+        if (modification !== undefined) {
+          // return false to drop the network request (feature)
+          //
+          // note: it only drops connection, the client might wait forever for a response.
+          // user should avoid using this method and return response with error instead.
+          //
+          // only use this when the client perform destructive action, like killing UI
+          // elements, ... By making it wait forever, the client will/might not delete
+          // the element or any interactive functions.
+          if (modification === false) {
+            state._kumiyui_response.body = null;
+            state._kumiyui_blocked = true;
+
+            // empty the send function
+            _hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
+            break;
+          }
+
+          if (typeof modification === "object") {
+            // update to the tampered data
+            ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+              if (modification[_res_key] !== undefined)
+                _response[_res_key] = modification[_res_key];
+              else
+                  // send to server defaults to false if not set
+                  if (_res_key === "send_to_server")
+                    _response["send_to_server"] = false;
+            });
+
+            // body can be null, so restrict to only undefined
+            state._kumiyui_response = _response;
+          } else if (typeof modification === "string") {
+            _response["body"] = modification;
+            state._kumiyui_response = _response;
+          }
+
+          // only execute the first hook
+          // read the documentation for more detail on how to register multiple hooks
+          break;
+        }
+      } catch (e) {
+        logger.error(`cannot execute hook listener on XHR hook (type: "before", first call), error:`, e);
+      }
+    }
+  }
+
   // start hooking
   _hook({
     obj: window,
@@ -321,6 +373,7 @@ const _init_network_hook = () => {
           _kumiyui_has_to_queue_response: false,
           _kumiyui_queued_response: null,
           _kumiyui_is_opened: false,
+          _kumiyui_send_triggered: false,
 
           // basic response data
           _kumiyui_context: { args: ["", null], method: "GET", api: "xhr", before_state: null },
@@ -366,6 +419,7 @@ const _init_network_hook = () => {
           }
         })
       }
+
       async open(method, url, ...args) {
         const state = xhr_hook_map.get(this);
         state._kumiyui_context.method = method;
@@ -373,54 +427,7 @@ const _init_network_hook = () => {
         state._kumiyui_context.before_state = "url";
 
         // xhr "before" (the first time allows user to modify url or block url)
-        for (const hook of hook_registry?.before) {
-          try {
-            const modification = await hook(state._kumiyui_context);
-            let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
-            if (modification !== undefined) {
-              // return false to drop the network request (feature)
-              //
-              // note: it only drops connection, the client might wait forever for a response.
-              // user should avoid using this method and return response with error instead.
-              //
-              // only use this when the client perform destructive action, like killing UI
-              // elements, ... By making it wait forever, the client will/might not delete
-              // the element or any interactive functions.
-              if (modification === false) {
-                state._kumiyui_response.body = null;
-                state._kumiyui_blocked = true;
-
-                // empty the send function
-                _hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
-                break;
-              }
-
-              if (typeof modification === "object") {
-                // update to the tampered data
-                ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
-                  if (modification[_res_key] !== undefined)
-                    _response[_res_key] = modification[_res_key];
-                  else
-                      // send to server defaults to false if not set
-                      if (_res_key === "send_to_server")
-                        _response["send_to_server"] = false;
-                });
-
-                // body can be null, so restrict to only undefined
-                state._kumiyui_response.body = _response;
-              } else if (typeof modification === "string") {
-                _response["body"] = modification;
-                state._kumiyui_response.body = _response;
-              }
-
-              // only execute the first hook
-              // read the documentation for more detail on how to register multiple hooks
-              break;
-            }
-          } catch (e) {
-            logger.error(`cannot execute hook listener on XHR hook (type: "before", first call), error:`, e);
-          }
-        }
+        await xhr_before(state);
 
         // start opening url natively
         // open() needs to be called before setRequestHeader() to avoid error
@@ -461,7 +468,11 @@ const _init_network_hook = () => {
 
       // return the spoofed response or original
       get response() {
-        const state = xhr_hook_map.get(this);
+        const state = xhr_hook_map.get(this); 
+
+        // avoid the web application from knowing the response before modification
+        if (state._kumiyui_finished === false)
+          return null;
 
         // return the default response if not blocked and if body is not modified
         if (state._kumiyui_response?.body === null)
@@ -487,6 +498,8 @@ const _init_network_hook = () => {
               const content_type_header = headers["content-type"] || headers["Content-Type"] || "";
               const mime_type = content_type_header.split(";")[0].replaceAll(" ", "") || "application/octet-stream";
               return new Blob([r_body], { type: mime_type })
+            case "text":
+              return r_body
             default:
               return r_body // i don't know yet, but if no data type matched, then just return the raw body
           }
@@ -519,7 +532,7 @@ const _init_network_hook = () => {
 
       get readyState() {
         const state = xhr_hook_map.get(this);
-        return state._kumiyui_blocked !== true
+        return (state._kumiyui_blocked !== true && state._kumiyui_finished)
           ? super.readyState
           : 3; // make it stuck at loading state (the client waits forever at this stage)
       }
@@ -547,7 +560,7 @@ const _init_network_hook = () => {
           const state = xhr_hook_map.get(this);
 
           // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(state);
+          await await_after_hook({ readyState: super.readyState }, state);
 
           // so the "after" hook finished, call the requested listener
           if (typeof on_state_change_fn === "function") {
@@ -566,7 +579,7 @@ const _init_network_hook = () => {
           const state = xhr_hook_map.get(this);
 
           // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(state);
+          await await_after_hook({ readyState: super.readyState }, state);
 
           // so the "after" hook finished, call the requested listener
           if (typeof onload_fn === "function") {
@@ -587,13 +600,13 @@ const _init_network_hook = () => {
         // only hook for state watcher event only
         if (event_type !== "readystatechange" && event_type !== "load")
           return super.addEventListener(...args);
+
+        // get private storage
+        const state = xhr_hook_map.get(this);
         
         const hook_wrapped_listener = async (..._o_args) => {
-          // get private storage
-          const state = xhr_hook_map.get(this);
-
-          // avoid client from knowing the reponse before "after" hook assigning response data
-          await await_after_hook(state);
+          // avoid client from knowing the reponse before "after" hook assigning response data 
+          await await_after_hook({ readyState: super.readyState }, state); 
 
           // so the "after" hook finished, call the requested listener
           if (typeof listener === "function") {
@@ -606,7 +619,6 @@ const _init_network_hook = () => {
         }
 
         // store a reference to the wrapper so removeEventListener can find it if needed
-        const state = xhr_hook_map.get(this);
         if (!state._kumiyui_event_listeners)
           state._kumiyui_event_listeners = new WeakMap();
         
@@ -623,7 +635,7 @@ const _init_network_hook = () => {
 
         if (state._kumiyui_event_listeners && state._kumiyui_event_listeners.has(listener)) {
           const wrapped = state._kumiyui_event_listeners.get(listener);
-          return super.removeEventListener(event_type, listener, ...args.splice(2));
+          return super.removeEventListener(event_type, wrapped, ...args.splice(2));
         }
 
         return super.removeEventListener(event_type, listener, ...args.splice(2));
@@ -631,11 +643,19 @@ const _init_network_hook = () => {
 
       // send function (uses for tracking "after" hooks and body for "before" hooks)
       async send(body) {
+        // get state
         const state = xhr_hook_map.get(this);
+
+        // send() can only be called once
+        if (state._kumiyui_send_triggered === true)
+          return super.send(body); // return the native send again so that it triggers error
+
+        // change states
         state._kumiyui_context.args[1] = body;
         state._kumiyui_context.before_state = "body";
         const context = state._kumiyui_context;
 
+        // hook the .json() so that the web application receive the modified body
         Object.defineProperty(this, "json", {
           get() {
             const r_body = context?.args[1];
@@ -653,51 +673,7 @@ const _init_network_hook = () => {
         })
 
         // xhr "before" (the second time allows user to modify body data, but user cannot modify url)
-        for (const hook of hook_registry?.before) {
-          try {
-            const modification = await hook(context);
-            let _response = { status: 200, statusText: "OK", headers: new Headers(), body: null, send_to_server: false };
-            if (modification !== undefined) {
-              // return false to drop the network request (feature)
-              //
-              // note: it only drops connection, the client might wait forever for a response.
-              // user should avoid using this method and return response with error instead.
-              //
-              // only use this when the client perform destructive action, like killing UI
-              // elements, ... By making it wait forever, the client will/might not delete
-              // the element or any interactive functions.
-              if (modification === false) {
-                state._kumiyui_response.body = null;
-                state._kumiyui_blocked = true;
-                break;
-              }
-
-              if (modification && typeof modification === "object") {
-                // update to the tampered data
-                ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
-                  if (modification[_res_key] !== undefined)
-                    _response[_res_key] = modification[_res_key];
-                  else
-                      // send to server defaults to false if not set
-                      if (_res_key === "send_to_server")
-                        _response["send_to_server"] = false;
-                });
-
-                // body can be null, so restrict to only undefined
-                state._kumiyui_response.body = _response;
-              } else if (typeof modification === "string") {
-                _response["body"] = modification;
-                state._kumiyui_response.body = _response;
-              }
-
-              // only execute the first hook
-              // read the documentation for more detail on how to register multiple hooks
-              break;
-            }
-          } catch (e) {
-            logger.error(`cannot execute hook listener on XHR hook (type: "before", second call), error:`, e);
-          }
-        }
+        await xhr_before(state);
 
         // if the connection is blocked, there's no point to execute the "after" hook
         if (state._kumiyui_blocked === true)
@@ -711,8 +687,8 @@ const _init_network_hook = () => {
             return;
           }
 
-          // only run on readyState
-          if (this.readyState !== 4)
+          // only run on finished state
+          if (super.readyState !== 4)
             return;
 
           let simulated_res = new Response(super.response, {
@@ -746,10 +722,10 @@ const _init_network_hook = () => {
                 });
 
                 // body can be null, so restrict to only undefined
-                state._kumiyui_response.body = _response;
+                state._kumiyui_response = _response
               } else if (typeof mod === "string") {
                 _response["body"] = mod;
-                state._kumiyui_response.body = _response;
+                state._kumiyui_response = _response;
               }
             } catch (e) {
               logger.error(`error on XHR hook (type: "after"), error:`, e);
@@ -772,7 +748,13 @@ const _init_network_hook = () => {
             ) return;
 
             // try to send it
-            return super.send(context.args[1]);
+            const native_send = super.send(context.args[1]);
+
+            // set send status
+            state._kumiyui_send_triggered = true;
+
+            // return the native send data
+            return native_send;
           } catch (e) {
             logger.error("cannot perform send() on xhr hook, error:", e)
           }
