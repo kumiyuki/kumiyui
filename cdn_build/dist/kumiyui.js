@@ -612,16 +612,16 @@
       return false;
     }
   };
-  var await_after_hook = async (env) => {
-    if (env?.readyState === 4 && env?._kumiyui_finished === true || env?._kumiyui_blocked === true)
+  var await_after_hook = async (env, state) => {
+    if (env?.readyState === 4 && state?._kumiyui_finished === true || state?._kumiyui_blocked === true)
       return;
-    if (env?.readyState === 4 && !env._kumiyui_finished) {
+    if (env?.readyState === 4 && !state._kumiyui_finished) {
       await new Promise((resolve) => {
-        env?._kumiyui_change_listeners.push(resolve);
-        if (env._kumiyui_finished === true || env._kumiyui_blocked === true) {
-          const listener_index = env._kumiyui_change_listeners.indexOf(resolve);
+        state?._kumiyui_change_listeners.push(resolve);
+        if (state._kumiyui_finished === true || state._kumiyui_blocked === true) {
+          const listener_index = state._kumiyui_change_listeners.indexOf(resolve);
           if (listener_index !== -1)
-            env._kumiyui_change_listeners.splice(listener_index, 1);
+            state._kumiyui_change_listeners.splice(listener_index, 1);
           return resolve();
         }
       });
@@ -802,6 +802,37 @@
       });
     }
     const xhr_hook_map = new WeakMap;
+    const xhr_before = async (state) => {
+      for (const hook2 of hook_registry?.before) {
+        try {
+          const modification = await hook2(state._kumiyui_context);
+          let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
+          if (modification !== undefined) {
+            if (modification === false) {
+              state._kumiyui_response.body = null;
+              state._kumiyui_blocked = true;
+              hook({ obj: null, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
+              break;
+            }
+            if (typeof modification === "object") {
+              ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
+                if (modification[_res_key] !== undefined)
+                  _response[_res_key] = modification[_res_key];
+                else if (_res_key === "send_to_server")
+                  _response["send_to_server"] = false;
+              });
+              state._kumiyui_response = _response;
+            } else if (typeof modification === "string") {
+              _response["body"] = modification;
+              state._kumiyui_response = _response;
+            }
+            break;
+          }
+        } catch (e) {
+          logger3.error(`cannot execute hook listener on XHR hook (type: "before", first call), error:`, e);
+        }
+      }
+    };
     hook({
       obj: window,
       prop: "XMLHttpRequest",
@@ -815,6 +846,7 @@
             _kumiyui_has_to_queue_response: false,
             _kumiyui_queued_response: null,
             _kumiyui_is_opened: false,
+            _kumiyui_send_triggered: false,
             _kumiyui_context: { args: ["", null], method: "GET", api: "xhr", before_state: null },
             _kumiyui_response: {
               status: null,
@@ -850,35 +882,7 @@
           state._kumiyui_context.method = method;
           state._kumiyui_context.args[0] = url;
           state._kumiyui_context.before_state = "url";
-          for (const hook2 of hook_registry?.before) {
-            try {
-              const modification = await hook2(state._kumiyui_context);
-              let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
-              if (modification !== undefined) {
-                if (modification === false) {
-                  state._kumiyui_response.body = null;
-                  state._kumiyui_blocked = true;
-                  hook({ obj: this, prop: "send", new_value: () => {}, options: { mask_hook: true, block_overwrite: true } });
-                  break;
-                }
-                if (typeof modification === "object") {
-                  ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
-                    if (modification[_res_key] !== undefined)
-                      _response[_res_key] = modification[_res_key];
-                    else if (_res_key === "send_to_server")
-                      _response["send_to_server"] = false;
-                  });
-                  state._kumiyui_response.body = _response;
-                } else if (typeof modification === "string") {
-                  _response["body"] = modification;
-                  state._kumiyui_response.body = _response;
-                }
-                break;
-              }
-            } catch (e) {
-              logger3.error(`cannot execute hook listener on XHR hook (type: "before", first call), error:`, e);
-            }
-          }
+          await xhr_before(state);
           const open_native = super.open(method, state._kumiyui_context.args[0], ...args);
           state._kumiyui_is_opened = true;
           while (state._kumiyui_queued_headers.length > 0) {
@@ -904,6 +908,8 @@
         }
         get response() {
           const state = xhr_hook_map.get(this);
+          if (state._kumiyui_finished === false)
+            return null;
           if (state._kumiyui_response?.body === null)
             return !state._kumiyui_blocked ? super.response : null;
           const r_body = state._kumiyui_response?.body;
@@ -921,6 +927,8 @@
                 const content_type_header = headers["content-type"] || headers["Content-Type"] || "";
                 const mime_type = content_type_header.split(";")[0].replaceAll(" ", "") || "application/octet-stream";
                 return new Blob([r_body], { type: mime_type });
+              case "text":
+                return r_body;
               default:
                 return r_body;
             }
@@ -943,7 +951,7 @@
         }
         get readyState() {
           const state = xhr_hook_map.get(this);
-          return state._kumiyui_blocked !== true ? super.readyState : 3;
+          return state._kumiyui_blocked !== true && state._kumiyui_finished ? super.readyState : 3;
         }
         getResponseHeader(...data) {
           const state = xhr_hook_map.get(this);
@@ -956,7 +964,7 @@
         set onreadystatechange(on_state_change_fn) {
           super.onreadystatechange = async (..._o_args) => {
             const state = xhr_hook_map.get(this);
-            await await_after_hook(state);
+            await await_after_hook({ readyState: super.readyState }, state);
             if (typeof on_state_change_fn === "function") {
               try {
                 on_state_change_fn.apply(this, _o_args);
@@ -969,7 +977,7 @@
         set onload(onload_fn) {
           super.onload = async (..._o_args) => {
             const state = xhr_hook_map.get(this);
-            await await_after_hook(state);
+            await await_after_hook({ readyState: super.readyState }, state);
             if (typeof onload_fn === "function") {
               try {
                 onload_fn.apply(this, _o_args);
@@ -984,9 +992,9 @@
           const listener = args[1];
           if (event_type !== "readystatechange" && event_type !== "load")
             return super.addEventListener(...args);
+          const state = xhr_hook_map.get(this);
           const hook_wrapped_listener = async (..._o_args) => {
-            const state = xhr_hook_map.get(this);
-            await await_after_hook(state);
+            await await_after_hook({ readyState: super.readyState }, state);
             if (typeof listener === "function") {
               try {
                 listener.apply(this, _o_args);
@@ -995,7 +1003,6 @@
               }
             }
           };
-          const state = xhr_hook_map.get(this);
           if (!state._kumiyui_event_listeners)
             state._kumiyui_event_listeners = new WeakMap;
           state._kumiyui_event_listeners.set(listener, hook_wrapped_listener);
@@ -1007,12 +1014,14 @@
           const listener = args[1];
           if (state._kumiyui_event_listeners && state._kumiyui_event_listeners.has(listener)) {
             const wrapped = state._kumiyui_event_listeners.get(listener);
-            return super.removeEventListener(event_type, listener, ...args.splice(2));
+            return super.removeEventListener(event_type, wrapped, ...args.splice(2));
           }
           return super.removeEventListener(event_type, listener, ...args.splice(2));
         }
         async send(body) {
           const state = xhr_hook_map.get(this);
+          if (state._kumiyui_send_triggered === true)
+            return super.send(body);
           state._kumiyui_context.args[1] = body;
           state._kumiyui_context.before_state = "body";
           const context = state._kumiyui_context;
@@ -1032,34 +1041,7 @@
               context.args[1] = JSON.stringify(value);
             }
           });
-          for (const hook of hook_registry?.before) {
-            try {
-              const modification = await hook(context);
-              let _response = { status: 200, statusText: "OK", headers: new Headers, body: null, send_to_server: false };
-              if (modification !== undefined) {
-                if (modification === false) {
-                  state._kumiyui_response.body = null;
-                  state._kumiyui_blocked = true;
-                  break;
-                }
-                if (modification && typeof modification === "object") {
-                  ["status", "statusText", "headers", "body", "send_to_server"].forEach((_res_key) => {
-                    if (modification[_res_key] !== undefined)
-                      _response[_res_key] = modification[_res_key];
-                    else if (_res_key === "send_to_server")
-                      _response["send_to_server"] = false;
-                  });
-                  state._kumiyui_response.body = _response;
-                } else if (typeof modification === "string") {
-                  _response["body"] = modification;
-                  state._kumiyui_response.body = _response;
-                }
-                break;
-              }
-            } catch (e) {
-              logger3.error(`cannot execute hook listener on XHR hook (type: "before", second call), error:`, e);
-            }
-          }
+          await xhr_before(state);
           if (state._kumiyui_blocked === true)
             return;
           super.addEventListener("readystatechange", async () => {
@@ -1067,7 +1049,7 @@
               state._kumiyui_finished = true;
               return;
             }
-            if (this.readyState !== 4)
+            if (super.readyState !== 4)
               return;
             let simulated_res = new Response(super.response, {
               status: super.status,
@@ -1097,10 +1079,10 @@
                     else if (_res_key === "send_to_server")
                       _response["send_to_server"] = false;
                   });
-                  state._kumiyui_response.body = _response;
+                  state._kumiyui_response = _response;
                 } else if (typeof mod === "string") {
                   _response["body"] = mod;
-                  state._kumiyui_response.body = _response;
+                  state._kumiyui_response = _response;
                 }
               } catch (e) {
                 logger3.error(`error on XHR hook (type: "after"), error:`, e);
@@ -1115,7 +1097,9 @@
             try {
               if (state._kumiyui_blocked === true || state._kumiyui_response?.send_to_server === false)
                 return;
-              return super.send(context.args[1]);
+              const native_send = super.send(context.args[1]);
+              state._kumiyui_send_triggered = true;
+              return native_send;
             } catch (e) {
               logger3.error("cannot perform send() on xhr hook, error:", e);
             }
